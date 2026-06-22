@@ -71,6 +71,15 @@ TRANSLATIONS = {
         'recent_tasks': 'Recent Tasks',
         'view_all': 'View All',
         'no_tasks': 'No tasks found',
+        'filter_all': 'All',
+        'filter_new': 'New',
+        'filter_progress': 'In Progress',
+        'filter_review': 'Under Review',
+        'filter_completed': 'Completed',
+        'filter_closed': 'Closed',
+        'unassigned': 'Unassigned',
+        'system_note_auto_close': 'System: Task auto-closed — assignee did not open within 10 minutes.',
+        'system_note_overdue_close': 'System: Task closed automatically — deadline passed.',
         'task_title': 'Task Title',
         'creator': 'Created By',
         'assignee': 'Assigned To',
@@ -267,6 +276,15 @@ TRANSLATIONS = {
         'recent_tasks': 'أحدث المهام',
         'view_all': 'عرض الكل',
         'no_tasks': 'لا توجد مهام',
+        'filter_all': 'الكل',
+        'filter_new': 'جديدة',
+        'filter_progress': 'قيد التنفيذ',
+        'filter_review': 'قيد المراجعة',
+        'filter_completed': 'مكتملة',
+        'filter_closed': 'مغلقة',
+        'unassigned': 'غير مُسند',
+        'system_note_auto_close': 'النظام: تم الإغلاق آلياً — لم يفتح المُكلف المهمة خلال 10 دقائق.',
+        'system_note_overdue_close': 'النظام: تم الإغلاق آلياً — انتهى موعد الاستحقاق.',
         'task_title': 'عنوان المهمة',
         'creator': 'منشئ المهمة',
         'assignee': 'المُكلف بالمهمة',
@@ -396,6 +414,22 @@ TRANSLATIONS = {
 }
 
 
+USER_NAME_I18N = {
+    'admin': {'en': 'General Manager', 'ar': 'المدير العام'},
+}
+
+SYSTEM_UPDATE_MAP = {
+    '[SYS:auto_close_10m]': 'system_note_auto_close',
+    '[SYS:overdue_close]': 'system_note_overdue_close',
+}
+
+
+def _bundle():
+    from flask import session
+    lang = session.get('lang', 'ar')
+    return TRANSLATIONS.get(lang, TRANSLATIONS['ar'])
+
+
 def get_lang():
     from flask import session
     lang = session.get('lang', 'ar')
@@ -407,6 +441,47 @@ def t(key):
     lang = session.get('lang', 'ar')
     bundle = TRANSLATIONS.get(lang, TRANSLATIONS['ar'])
     return bundle.get(key, TRANSLATIONS['en'].get(key, key))
+
+
+def status_label(status_code):
+    if not status_code:
+        return ''
+    key = 'status_' + str(status_code).replace(' ', '_')
+    bundle = _bundle()
+    return bundle.get(key, TRANSLATIONS['en'].get(key, status_code))
+
+
+def priority_label(priority):
+    if not priority:
+        return '—'
+    key = 'priority_' + str(priority).lower()
+    bundle = _bundle()
+    return bundle.get(key, TRANSLATIONS['en'].get(key, priority))
+
+
+def localized_user_name(user):
+    if not user:
+        return ''
+    from flask import session
+    lang = session.get('lang', 'ar')
+    override = USER_NAME_I18N.get(user.username, {})
+    if lang in override:
+        return override[lang]
+    return user.full_name or user.username
+
+
+def update_content(text):
+    if not text:
+        return ''
+    bundle = _bundle()
+    key = SYSTEM_UPDATE_MAP.get(text.strip())
+    if key:
+        return bundle.get(key, text)
+    if '[إجراء تلقائي]' in text or 'إغلاق' in text and '10 دقائق' in text:
+        return bundle.get('system_note_auto_close', text)
+    if '[إجراء تلقائي]' in text and ('Deadline' in text or 'الموعد' in text):
+        return bundle.get('system_note_overdue_close', text)
+    return text
 
 
 def flash_t(key, category='success'):

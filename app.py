@@ -12,9 +12,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import xlsxwriter
 import pandas as pd
 from sqlalchemy import text
-from i18n import TRANSLATIONS, t as tr, flash_t
+from i18n import TRANSLATIONS, t as tr, flash_t, status_label, priority_label, localized_user_name, update_content
 
-APP_VERSION = '2.4.0'
+APP_VERSION = '2.4.1'
 APP_NAME = 'Lotus Task Manager'
 APP_PORT = 5000
 
@@ -181,8 +181,12 @@ def seed_feature_visibility():
 def inject_translations():
     lang = session.get('lang', 'ar')
     tr_dict = TRANSLATIONS.get(lang, TRANSLATIONS['ar'])
-    display_name = current_user.full_name if current_user.is_authenticated else ''
-    return dict(lang=lang, t=tr_dict, user_can_see=user_can_see, display_name=display_name, app_version=APP_VERSION, app_name=APP_NAME)
+    display_name = localized_user_name(current_user) if current_user.is_authenticated else ''
+    return dict(
+        lang=lang, t=tr_dict, user_can_see=user_can_see, display_name=display_name,
+        app_version=APP_VERSION, app_name=APP_NAME,
+        status_label=status_label, priority_label=priority_label, update_content=update_content,
+    )
 
 @app.route('/set_language/<lang_code>')
 def set_language(lang_code):
@@ -197,50 +201,50 @@ def automated_system_checks():
         # 1. فحص الـ 10 دقائق (المهام الجديدة التي لم تفتح)
         ten_mins_ago = now - timedelta(minutes=10)
         neglected_tasks = Task.query.filter(Task.status == 'New', Task.created_at <= ten_mins_ago).all()
-        for t in neglected_tasks:
-            t.status = 'Closed_by_System'
-            db.session.add(TaskUpdate(content="[إجراء تلقائي] تم الإغلاق بواسطة النظام: الموظف لم يفتح المهمة خلال 10 دقائق من إرسالها.", is_note=True, task_id=t.id, user_id=t.creator_id))
-            if t.creator_id:
+        for task in neglected_tasks:
+            task.status = 'Closed_by_System'
+            db.session.add(TaskUpdate(content="[SYS:auto_close_10m]", is_note=True, task_id=task.id, user_id=task.creator_id))
+            if task.creator_id:
                 create_notification(
-                    t.creator_id, 'task_update',
-                    'إغلاق تلقائي / Auto Closed',
-                    f"المهمة '{t.title}' أُغلقت — الموظف لم يفتحها خلال 10 دقائق",
-                    link=f'/tasks/{t.id}', task_id=t.id
+                    task.creator_id, 'task_update',
+                    f"{TRANSLATIONS['ar']['notif_auto_closed']} / {TRANSLATIONS['en']['notif_auto_closed']}",
+                    f"{TRANSLATIONS['ar']['system_note_auto_close']} / {TRANSLATIONS['en']['system_note_auto_close']}",
+                    link=f'/tasks/{task.id}', task_id=task.id
                 )
             try:
-                recipients = [t.creator.email] if t.creator.email else []
-                cc_list = [t.head.email] if (t.head and t.head.email) else []
+                recipients = [task.creator.email] if task.creator.email else []
+                cc_list = [task.head.email] if (task.head and task.head.email) else []
                 if recipients:
-                    msg = Message(f"عاجل: إغلاق نظام لمهمة مهملة #{t.id}", sender=app.config['MAIL_USERNAME'], recipients=recipients, cc=cc_list)
-                    msg.body = f"تم إغلاق المهمة '{t.title}' تلقائياً لأن الموظف ({t.assignee.full_name}) لم يقم بفتحها أو العمل عليها خلال 10 دقائق."
+                    msg = Message(f"Urgent: Auto-closed task #{task.id}", sender=app.config['MAIL_USERNAME'], recipients=recipients, cc=cc_list)
+                    msg.body = TRANSLATIONS['en']['system_note_auto_close'] + f"\nTask: {task.title}\nAssignee: {task.assignee.full_name if task.assignee else '--'}"
                     mail.send(msg)
             except: pass
 
         # 2. فحص الديدلاين (Overdue)
         overdue_tasks = Task.query.filter(Task.deadline < now, Task.status.notin_(['Completed', 'Closed', 'Closed_by_System', 'Overdue_Closed'])).all()
-        for t in overdue_tasks:
-            t.status = 'Overdue_Closed'
-            t.completed_at = now
-            db.session.add(TaskUpdate(content="[إجراء تلقائي] تم إغلاق المهمة إجبارياً لتجاوز الموعد المحدد (Deadline).", is_note=True, task_id=t.id, user_id=t.creator_id))
-            if t.creator_id:
+        for task in overdue_tasks:
+            task.status = 'Overdue_Closed'
+            task.completed_at = now
+            db.session.add(TaskUpdate(content="[SYS:overdue_close]", is_note=True, task_id=task.id, user_id=task.creator_id))
+            if task.creator_id:
                 create_notification(
-                    t.creator_id, 'deadline_passed',
-                    'انتهى موعد المهمة / Deadline Passed',
-                    f"المهمة '{t.title}' تجاوزت الموعد المحدد",
-                    link=f'/tasks/{t.id}', task_id=t.id
+                    task.creator_id, 'deadline_passed',
+                    f"{TRANSLATIONS['ar']['deadline_passed']} / {TRANSLATIONS['en']['deadline_passed']}",
+                    f"'{task.title}' — {TRANSLATIONS['en']['deadline_passed_msg']}",
+                    link=f'/tasks/{task.id}', task_id=task.id
                 )
-            if t.head_id and t.head_id != t.creator_id:
+            if task.head_id and task.head_id != task.creator_id:
                 create_notification(
-                    t.head_id, 'deadline_passed',
-                    'انتهى موعد المهمة / Deadline Passed',
-                    f"المهمة '{t.title}' تجاوزت الموعد المحدد",
-                    link=f'/tasks/{t.id}', task_id=t.id
+                    task.head_id, 'deadline_passed',
+                    f"{TRANSLATIONS['ar']['deadline_passed']} / {TRANSLATIONS['en']['deadline_passed']}",
+                    f"'{task.title}' — {TRANSLATIONS['en']['deadline_passed_msg']}",
+                    link=f'/tasks/{task.id}', task_id=task.id
                 )
             try:
-                if t.creator and t.creator.email:
-                    cc_list = [t.head.email] if (t.head and t.head.email) else []
-                    msg = Message(f"تنبيه: انتهى موعد المهمة #{t.id}", sender=app.config['MAIL_USERNAME'], recipients=[t.creator.email], cc=cc_list)
-                    msg.body = f"المهمة '{t.title}' تجاوزت الموعد المحدد وتم إغلاقها تلقائياً.\nالمسؤول: {t.assignee.full_name if t.assignee else '--'}"
+                if task.creator and task.creator.email:
+                    cc_list = [task.head.email] if (task.head and task.head.email) else []
+                    msg = Message(f"Alert: Task deadline passed #{task.id}", sender=app.config['MAIL_USERNAME'], recipients=[task.creator.email], cc=cc_list)
+                    msg.body = TRANSLATIONS['en']['system_note_overdue_close'] + f"\nTask: {task.title}\nAssignee: {task.assignee.full_name if task.assignee else '--'}"
                     mail.send(msg)
             except: pass
         
@@ -610,14 +614,14 @@ def create_task():
         db.session.add(new_task); db.session.commit()
         create_notification(
             assignee.id, 'new_task',
-            'مهمة جديدة' if session.get('lang', 'ar') == 'ar' else 'New Task',
+            tr('notif_new_task'),
             f"{current_user.full_name}: {new_task.title}",
             link=f'/tasks/{new_task.id}', task_id=new_task.id
         )
         if cc_user and cc_user.id != assignee.id:
             create_notification(
                 cc_user.id, 'new_task',
-                'مهمة جديدة (CC)' if session.get('lang', 'ar') == 'ar' else 'New Task (CC)',
+                tr('notif_new_task_cc'),
                 f"{current_user.full_name}: {new_task.title}",
                 link=f'/tasks/{new_task.id}', task_id=new_task.id
             )
@@ -675,13 +679,13 @@ def task_detail(id):
                 notify_ids.add(t.assignee_id)
             msg_text = f"{current_user.full_name}: {t.title}"
             if status_changed:
-                msg_text += f" → {ns}"
+                msg_text += f" → {status_label(ns)}"
             if cnt:
                 msg_text += f" — {cnt[:80]}{'...' if len(cnt) > 80 else ''}"
             for uid in notify_ids:
                 create_notification(
                     uid, 'task_update',
-                    'تحديث مهمة' if session.get('lang', 'ar') == 'ar' else 'Task Update',
+                    tr('notif_task_update'),
                     msg_text, link=f'/tasks/{t.id}', task_id=t.id
                 )
             db.session.commit()
