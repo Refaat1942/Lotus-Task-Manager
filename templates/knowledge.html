@@ -1,0 +1,95 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold"><i class="fas fa-book text-primary"></i> {{ t['knowledge_title'] }}</h3>
+        {% if current_user.role in ['admin', 'head'] %}
+        <button class="btn btn-primary" onclick="new bootstrap.Modal(document.getElementById('addArticleModal')).show()">
+            <i class="fas fa-plus"></i> {{ t['add_article'] }}
+        </button>
+        {% endif %}
+    </div>
+
+    <div class="card p-4 mb-4 bg-white shadow-sm border-0">
+        <form method="GET" action="/knowledge">
+            <div class="input-group input-group-lg">
+                <span class="input-group-text bg-light border-end-0"><i class="fas fa-search text-muted"></i></span>
+                <input type="text" name="search" class="form-control border-start-0 bg-light" placeholder="{{ t['search_placeholder'] }}" value="{{ search }}">
+                <button class="btn btn-dark" type="submit">{{ t['search_btn'] }}</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="row g-3">
+        {% for article in articles %}
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm border-0 border-top border-3 border-info">
+                <div class="card-body">
+                    <span class="badge bg-light text-dark border mb-2">{{ article.category }}</span>
+                    <h5 class="card-title fw-bold text-dark">{{ article.title }}</h5>
+                    <p class="card-text text-muted small">{{ article.content[:100] }}...</p>
+                    <button class="btn btn-sm btn-outline-primary w-100 mt-2" data-bs-toggle="modal" data-bs-target="#viewArticle{{ article.id }}">{{ t['read_details'] }}</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="viewArticle{{ article.id }}" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-light">
+                        <h5 class="modal-title fw-bold">{{ article.title }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" style="white-space: pre-wrap;">{{ article.content }}</div>
+                    <div class="modal-footer">
+                        <small class="text-muted me-auto">{{ t['added_by'] }} {{ article.author.full_name }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-folder-open fa-3x text-muted mb-3 opacity-25"></i>
+            <h5 class="text-muted">{{ t['no_documents'] }}</h5>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if current_user.role in ['admin', 'head'] %}
+<div class="modal fade" id="addArticleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="/knowledge/add">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title">{{ t['add_new_doc'] }}</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">{{ t['doc_title'] }}</label>
+                        <input type="text" name="title" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ t['category'] }}</label>
+                        <select name="category" class="form-select">
+                            <option>{{ t['cat_hr'] }}</option>
+                            <option>{{ t['cat_it'] }}</option>
+                            <option>{{ t['cat_general'] }}</option>
+                            <option>{{ t['cat_forms'] }}</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ t['content'] }}</label>
+                        <textarea name="content" class="form-control" rows="10" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> {{ t['save_publish'] }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

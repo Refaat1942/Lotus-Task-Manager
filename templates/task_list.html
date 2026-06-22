@@ -1,0 +1,68 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold text-dark"><i class="fas fa-list"></i> {{ t['tasks_list'] }}</h3>
+    {% if current_user.role in ['admin', 'head', 'Manager', 'CEO'] %}
+    <a href="/tasks/create" class="btn btn-primary"><i class="fas fa-plus"></i> {{ t['new_task'] }}</a>
+    {% endif %}
+</div>
+
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-body p-2">
+        <ul class="nav nav-pills nav-fill">
+            <li class="nav-item"><a class="nav-link {{ 'active' if not request.args.get('status') else '' }}" href="/tasks">{{ t['filter_all'] | default('الكل') }}</a></li>
+            <li class="nav-item"><a class="nav-link {{ 'active' if request.args.get('status') == 'New' else '' }}" href="/tasks?status=New">🆕 {{ t['filter_new'] | default('جديدة') }}</a></li>
+            <li class="nav-item"><a class="nav-link {{ 'active' if request.args.get('status') == 'In Progress' else '' }}" href="/tasks?status=In Progress">⏳ {{ t['filter_progress'] | default('قيد التنفيذ') }}</a></li>
+            <li class="nav-item"><a class="nav-link {{ 'active' if request.args.get('status') == 'Under Review' else '' }}" href="/tasks?status=Under Review">👀 {{ t['filter_review'] | default('قيد المراجعة') }}</a></li>
+            <li class="nav-item"><a class="nav-link {{ 'active' if request.args.get('status') == 'Completed' else '' }}" href="/tasks?status=Completed">✅ {{ t['filter_completed'] | default('مكتملة') }}</a></li>
+        </ul>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary">
+                    <tr>
+                        <th class="ps-4">#ID</th>
+                        <th>{{ t['task_title'] }}</th>
+                        <th>{{ t['assignee'] }}</th>
+                        <th>{{ t['head_cc'] }}</th>
+                        <th>{{ t['deadline'] }}</th>
+                        <th>{{ t['status'] }}</th>
+                        <th>{{ t['priority'] }}</th>
+                        <th>{{ t['action'] }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in tasks %}
+                    <tr>
+                        <td class="ps-4 fw-bold">#{{ task.id }}</td>
+                        <td><a href="/tasks/{{ task.id }}" class="text-decoration-none text-dark fw-bold">{{ task.title }}</a></td>
+                        <td><div class="d-flex align-items-center"><i class="fas fa-user-circle fs-4 me-2 text-muted"></i><span>{{ task.assignee.full_name if task.assignee else t['unassigned'] | default('غير محدد') }}</span></div></td>
+                        <td><span class="text-info fw-bold"><i class="fas fa-eye"></i> {{ task.head.full_name if task.head else '--' }}</span></td>
+                        <td class="{{ 'text-danger fw-bold' if task.is_overdue else '' }}">{{ task.deadline.strftime('%Y-%m-%d %H:%M') if task.deadline else t['no_deadline'] }}</td>
+                        <td><span class="badge bg-light text-dark border">{{ t['status_' ~ task.status.replace(' ', '_')] if ('status_' ~ task.status.replace(' ', '_')) in t else task.status }}</span></td>
+                        
+                        <td>
+                            <span class="badge bg-secondary">
+                                {% if task.priority %}
+                                    {{ t['priority_' ~ task.priority.lower()] if ('priority_' ~ task.priority.lower()) in t else task.priority }}
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </span>
+                        </td>
+                        
+                        <td><a href="/tasks/{{ task.id }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> {{ t['view'] }}</a></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="text-center py-5 text-muted"><i class="fas fa-inbox fa-3x mb-3"></i><br>{{ t['no_tasks'] | default('لا توجد مهام') }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

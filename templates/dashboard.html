@@ -1,0 +1,108 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold text-secondary">{{ t['overview'] }}</h3>
+    <p class="text-muted mb-0"><i class="fas fa-clock"></i> {{ today_date }}</p>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100 border-start border-4 border-primary">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-2" style="font-size: 0.8rem">{{ t['total_tasks'] }}</h6>
+                <div class="d-flex align-items-center justify-content-between">
+                    <h2 class="mb-0 fw-bold">{{ stats.total_tasks }}</h2>
+                    <i class="fas fa-tasks fa-2x text-primary opacity-25"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100 border-start border-4 border-success">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-2" style="font-size: 0.8rem">{{ t['in_progress'] }}</h6>
+                <div class="d-flex align-items-center justify-content-between">
+                    <h2 class="mb-0 fw-bold">{{ stats.in_progress }}</h2>
+                    <i class="fas fa-hourglass-half fa-2x text-success opacity-25"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100 border-start border-4 border-danger">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-2" style="font-size: 0.8rem">{{ t['overdue'] }}</h6>
+                <div class="d-flex align-items-center justify-content-between">
+                    <h2 class="mb-0 fw-bold text-danger">{{ stats.overdue }}</h2>
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger opacity-25"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100 border-start border-4 border-info">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-2" style="font-size: 0.8rem">{{ t['completed'] }}</h6>
+                <div class="d-flex align-items-center justify-content-between">
+                    <h2 class="mb-0 fw-bold">{{ stats.completed }}</h2>
+                    <i class="fas fa-check-double fa-2x text-info opacity-25"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold text-dark">{{ t['recent_tasks'] }}</h5>
+        <a href="/tasks" class="btn btn-sm btn-light text-primary fw-bold">{{ t['view_all'] }}</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary small">
+                    <tr>
+                        <th class="ps-4">#</th>
+                        <th>{{ t['task_title'] }}</th>
+                        <th>{{ t['creator'] }}</th>
+                        <th>{{ t['assignee'] }}</th>
+                        <th>{{ t['deadline'] }}</th>
+                        <th>{{ t['status'] }}</th>
+                        <th>{{ t['action'] }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in recent_tasks %}
+                    <tr>
+                        <td class="ps-4 fw-bold">#{{ task.id }}</td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ task.title }}</div>
+                            <span class="badge {{ 'bg-danger' if task.priority == 'Urgent' else 'bg-secondary' }}">{{ task.priority }}</span>
+                        </td>
+                        <td>{{ task.creator.full_name }}</td>
+                        <td>{{ task.assignee.full_name }}</td>
+                        <td class="{{ 'text-danger fw-bold' if task.is_overdue else 'text-muted' }}">
+                            {{ task.deadline.strftime('%Y-%m-%d %H:%M') if task.deadline else t['open'] }}
+                        </td>
+                        <td>
+                            <span class="badge {{ 'bg-success' if task.status == 'Completed' else 'bg-warning text-dark' }} bg-opacity-25 px-3">
+                                {{ t['status_' ~ task.status] if ('status_' ~ task.status) in t else task.status }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('task_detail', id=task.id) }}" class="btn btn-sm btn-outline-primary">
+                                {{ t['view'] }}
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">{{ t['no_tasks'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-dark text-white fw-bold"><i class="fas fa-plus"></i> {{ t['add_rule'] }}</div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">{{ t['from_role'] }}:</label>
+                        <select name="from_role" class="form-select" required>
+                            {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">{{ t['to_role'] }}:</label>
+                        <select name="to_role" class="form-select" required>
+                            {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-info small">{{ t['cc_role'] }}:</label>
+                        <select name="cc_role" class="form-select border-info">
+                            <option value="">{{ t['no_cc'] }}</option>
+                            {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100"><i class="fas fa-save"></i> {{ t['save_rule'] }}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white fw-bold">{{ t['hierarchy_title'] }}</div>
+            <table class="table table-hover mb-0 text-center">
+                <thead class="bg-light">
+                    <tr>
+                        <th>{{ t['sender'] }}</th>
+                        <th><i class="fas fa-arrow-left"></i></th>
+                        <th>{{ t['receiver'] }}</th>
+                        <th>{{ t['appears_to'] }}</th>
+                        <th>{{ t['delete'] }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in rules %}
+                    <tr>
+                        <td class="fw-bold text-primary">{{ rule.from_role }}</td>
+                        <td><i class="fas fa-arrow-left text-muted"></i></td>
+                        <td class="fw-bold">{{ rule.to_role }}</td>
+                        <td><span class="badge bg-info text-dark">{{ rule.cc_role if rule.cc_role else '--' }}</span></td>
+                        <td>
+                            <a href="/admin/hierarchy/delete/{{ rule.id }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('{{ t['confirm_delete'] }}')"><i class="fas fa-trash"></i></a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

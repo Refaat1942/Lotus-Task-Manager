@@ -1,0 +1,79 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-9">
+        <div class="card shadow-lg border-0">
+            <div class="card-header bg-primary text-white p-4">
+                <h4 class="mb-0"><i class="fas fa-tasks"></i> {{ t['new_task'] }}</h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" enctype="multipart/form-data" action="/tasks/create">
+                    
+                    <h5 class="text-secondary mb-3 border-bottom pb-2">🎯 {{ t['task_details_title'] }}</h5>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">{{ t['task_title'] }} <span class="text-danger">*</span></label>
+                        <input type="text" name="title" class="form-control" required>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">{{ t['assign_to'] }} <span class="text-danger">*</span></label>
+                            <select name="assigned_to" class="form-select border-primary" required>
+                                <option value="" disabled selected>{{ t['select_emp'] }}</option>
+                                {% for user in users %}
+                                    {% if user.id != current_user.id %}
+                                    <option value="{{ user.id }}">{{ user.full_name }} - {{ user.role }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-danger"><i class="fas fa-clock"></i> {{ t['deadline'] }}</label>
+                            <input type="datetime-local" name="deadline" class="form-control border-danger">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">{{ t['priority'] }}</label>
+                            <select name="priority" class="form-select">
+                                <option value="Low">{{ t['priority_low'] }}</option>
+                                <option value="Medium" selected>{{ t['priority_medium'] }}</option>
+                                <option value="High">{{ t['priority_high'] }}</option>
+                                <option value="Urgent" class="text-danger fw-bold">{{ t['priority_urgent'] }}</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-success"><i class="fas fa-redo"></i> {{ t['recurrence'] }}</label>
+                            <select name="recurrence" class="form-select border-success">
+                                <option value="None">{{ t['rec_none'] }}</option>
+                                <option value="Daily">{{ t['rec_daily'] }}</option>
+                                <option value="Weekly">{{ t['rec_weekly'] }}</option>
+                                <option value="Monthly">{{ t['rec_monthly'] }}</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold"><i class="fas fa-paperclip"></i> {{ t['attachment'] }}</label>
+                            <input type="file" name="attachment" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">{{ t['description'] }} <span class="text-danger">*</span></label>
+                        <textarea name="description" class="form-control" rows="5" required></textarea>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg fw-bold"><i class="fas fa-paper-plane"></i> {{ t['create_btn'] }}</button>
+                        <a href="/tasks" class="btn btn-light btn-lg">{{ t['cancel'] }}</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

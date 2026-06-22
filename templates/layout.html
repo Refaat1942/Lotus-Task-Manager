@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ t['dir'] }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t['system_title'] }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    {% if lang == 'ar' %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    {% endif %}
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <style>
+        body { font-family: {{ t['font'] | default("'Cairo', sans-serif") }}; background-color: #f4f6f9; overflow-x: hidden; text-align: {{ 'right' if lang == 'ar' else 'left' }}; }
+        .sidebar { height: 100vh; background: #2c3e50; color: #fff; width: 260px; position: fixed; top: 0; overflow-y: auto; z-index: 1000; }
+        html[dir="rtl"] .sidebar { right: 0; }
+        html[dir="ltr"] .sidebar { left: 0; }
+        html[dir="rtl"] .main-content { margin-right: 260px; }
+        html[dir="ltr"] .main-content { margin-left: 260px; }
+        .sidebar a { color: #cfd8dc; text-decoration: none; display: block; padding: 12px 20px; transition: 0.2s; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .sidebar a:hover, .sidebar a.active { background: #34495e; color: #fff; border-left: 4px solid #3498db; }
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX({{ '100%' if lang=='ar' else '-100%' }}); }
+            .sidebar.active { transform: translateX(0); }
+            .main-content { margin: 0 !important; }
+        }
+    </style>
+</head>
+<body>
+    <audio id="notificationSound" src="https://assets.mixkit.co/active_storage/sfx/2866/2866-preview.mp3" preload="auto"></audio>
+    <audio id="managerSound" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" preload="auto"></audio>
+
+    {% if current_user.is_authenticated %}
+    <div class="sidebar" id="sidebar">
+        <div class="p-3 text-center bg-dark">
+            <h4 class="mb-0 fw-bold">{{ t['system_title'] }}</h4>
+            <small class="text-info">{{ current_user.role }}</small>
+        </div>
+        
+        <a href="/dashboard"><i class="fas fa-chart-pie fa-fw mx-2"></i> {{ t['dashboard'] }}</a>
+        <a href="/tasks/create"><i class="fas fa-plus-circle fa-fw mx-2"></i> {{ t['new_task'] }}</a>
+        <a href="/tasks"><i class="fas fa-tasks fa-fw mx-2"></i> {{ t['tasks_list'] }}</a>
+        
+        {% if current_user.role in ['admin', 'CEO', 'Manager', 'Section Head'] %}
+        <div class="text-uppercase small text-muted px-3 mt-3 mb-1">Reports & Tools</div>
+        <a href="/reports"><i class="fas fa-chart-line fa-fw mx-2"></i> {{ t['reports'] }}</a>
+        {% endif %}
+
+        {% if current_user.role in ['admin', 'CEO'] %}
+        <div class="text-uppercase small text-muted px-3 mt-3 mb-1">Admin Tools</div>
+        <a href="/admin/users"><i class="fas fa-users-cog fa-fw mx-2"></i> {{ t['users_manage'] }}</a>
+        <a href="/admin/departments"><i class="fas fa-building fa-fw mx-2"></i> {{ t['departments_manage'] }}</a>
+        <a href="/admin/hierarchy"><i class="fas fa-sitemap fa-fw mx-2"></i> {{ t['hierarchy_manage'] }}</a>
+        {% endif %}
+        
+        <div class="mt-4 border-top pt-2">
+            <a href="#" data-bs-toggle="modal" data-bs-target="#changeMyPassModal">
+                <i class="fas fa-key fa-fw mx-2"></i> {{ t['change_password'] }}
+            </a>
+            <a href="{{ url_for('set_language', lang_code='en' if lang=='ar' else 'ar') }}">
+                <i class="fas fa-globe fa-fw mx-2"></i> {{ t['lang_name'] }}
+            </a>
+            <a href="/logout" class="text-danger"><i class="fas fa-sign-out-alt fa-fw mx-2"></i> {{ t['logout'] }}</a>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="main-content">
+        <nav class="navbar navbar-light bg-white shadow-sm d-md-none mb-4 p-2">
+            <button class="btn btn-outline-secondary" onclick="document.getElementById('sidebar').classList.toggle('active')"><i class="fas fa-bars"></i></button>
+        </nav>
+        
+        <div class="container-fluid p-4">
+            {% if current_user.is_authenticated %}
+            <div class="d-flex justify-content-end align-items-center border-bottom pb-3 mb-4">
+                <div class="dropdown">
+                    <a href="#" class="text-dark position-relative fs-4 text-decoration-none" id="bellIcon" data-bs-toggle="dropdown" aria-expanded="false" title="الإشعارات">
+                        <i class="fas fa-bell"></i>
+                        <span id="notifBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow" style="font-size: 0.65rem; display: none;">
+                            0
+                        </span>
+                    </a>
+                    <ul class="dropdown-menu shadow-lg border-0 p-0" style="width: 320px; max-height: 400px; overflow-y: auto;">
+                        <li class="bg-light p-3 border-bottom text-center text-primary fw-bold">
+                            <i class="fas fa-bell me-2"></i> أحدث الإشعارات
+                        </li>
+                        <div id="notifList">
+                            <li class="text-center text-muted small py-4 fw-bold" id="emptyNotif">لا توجد إشعارات جديدة</li>
+                        </div>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm border-0">
+                            <strong>{{ message }}</strong>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <div class="modal fade" id="changeMyPassModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title">{{ t['change_password'] }}</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/change_my_password" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">{{ t['current_password'] }}</label>
+                            <input type="password" name="current_password" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-primary">{{ t['new_password'] }}</label>
+                            <input type="password" name="new_password" class="form-control" required minlength="6">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t['cancel'] }}</button>
+                        <button type="submit" class="btn btn-primary fw-bold"><i class="fas fa-save"></i> {{ t['save'] }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const lang = "{{ lang }}";
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // تحديث واجهة العداد عند تحميل الصفحة
+            updateBadgeUI();
+            
+            // الفحص الدوري كل 10 ثواني
+            setInterval(checkRealTimeNotifications, 10000); 
+            setInterval(checkManagerNotifications, 12000); 
+
+            // تصفير العداد عند الضغط على أيقونة الجرس
+            let bell = document.getElementById('bellIcon');
+            if(bell) {
+                bell.addEventListener('click', function() {
+                    localStorage.setItem('unread_count', '0');
+                    updateBadgeUI();
+                });
+            }
+        });
+
+        function getUnreadCount() {
+            return parseInt(localStorage.getItem('unread_count')) || 0;
+        }
+
+        function addUnreadCount() {
+            let count = getUnreadCount() + 1;
+            localStorage.setItem('unread_count', count);
+            updateBadgeUI();
+        }
+
+        function updateBadgeUI() {
+            let count = getUnreadCount();
+            let badge = document.getElementById('notifBadge');
+            if(badge) {
+                if (count > 0) {
+                    badge.innerText = count;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+
+        function addNotificationToList(title, text, link, iconClass) {
+            let emptyLabel = document.getElementById('emptyNotif');
+            if(emptyLabel) emptyLabel.style.display = 'none';
+            
+            let list = document.getElementById('notifList');
+            let item = document.createElement('a');
+            item.href = link;
+            item.className = "dropdown-item py-3 border-bottom text-wrap";
+            item.innerHTML = `
+                <div class="d-flex align-items-start">
+                    <i class="${iconClass} text-primary fs-4 me-3 ms-2 mt-1"></i>
+                    <div>
+                        <strong class="text-dark d-block mb-1">${title}</strong>
+                        <small class="text-muted" style="white-space: normal;">${text}</small>
+                    </div>
+                </div>`;
+            if(list) list.prepend(item);
+        }
+
+        // فحص المهام الجديدة للموظفين
+        function checkRealTimeNotifications() {
+            fetch('/api/task_notifications')
+            .then(response => response.json())
+            .then(data => {
+                let lastTaskID = parseInt(localStorage.getItem('last_notified_task_id')) || 0;
+                let currentID = parseInt(data.latest_task_id);
+                
+                // الصوت يعمل والإشعار يظهر فقط إذا كانت هناك مهمة جديدة برقم ID أكبر
+                if (currentID > lastTaskID) {
+                    let audio = document.getElementById('notificationSound');
+                    if(audio) { audio.play().catch(e => console.log('Audio blocked')); }
+                    
+                    addUnreadCount();
+                    addNotificationToList(
+                        lang === 'ar' ? 'مهمة جديدة' : 'New Task', 
+                        data.task_title, 
+                        `/tasks/${currentID}`, 
+                        'fas fa-thumbtack'
+                    );
+
+                    Swal.fire({
+                        title: lang === 'ar' ? 'مهمة جديدة! 🔔' : 'New Task! 🔔',
+                        text: data.task_title,
+                        icon: 'info', confirmButtonText: lang === 'ar' ? 'عرض المهمة' : 'View Task',
+                        toast: true, position: 'bottom-end', showConfirmButton: false, timer: 5000
+                    });
+                    
+                    localStorage.setItem('last_notified_task_id', currentID);
+                }
+            }).catch(e => console.log('Error checking tasks:', e));
+        }
+
+        // فحص تحديثات الحالات للمديرين
+        function checkManagerNotifications() {
+            fetch('/api/manager_notifications')
+            .then(response => response.json())
+            .then(data => {
+                let lastUpdateID = parseInt(localStorage.getItem('last_manager_update_id')) || 0;
+                let currentUpdateID = parseInt(data.update_id);
+
+                // الصوت يعمل فقط إذا كان هناك تحديث جديد لم يظهر من قبل
+                if (currentUpdateID > lastUpdateID) {
+                    let audio = document.getElementById('managerSound');
+                    if(audio) { audio.play().catch(e => console.log('Audio blocked')); }
+                    
+                    addUnreadCount();
+                    addNotificationToList(
+                        lang === 'ar' ? 'تحديث حالة مهمة' : 'Task Update', 
+                        `${data.by} ${lang === 'ar' ? 'حدّث:' : 'updated:'} ${data.task_title}`, 
+                        `/tasks/${data.task_id}`, 
+                        'fas fa-pencil-alt'
+                    );
+
+                    Swal.fire({
+                        title: lang === 'ar' ? 'تحديث جديد 📝' : 'New Update',
+                        html: `<b>${data.by}</b> ${lang === 'ar' ? 'قام بتحديث المهمة:' : 'updated:'} <br> ${data.task_title}`,
+                        icon: 'success', toast: true, position: 'bottom-end', showConfirmButton: false, timer: 5000
+                    });
+                    
+                    localStorage.setItem('last_manager_update_id', currentUpdateID);
+                }
+            }).catch(e => console.log('Error checking updates:', e));
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-dark text-white fw-bold"><i class="fas fa-building"></i> {{ t['add_dept'] }}</div>
+            <div class="card-body">
+                <form method="POST" action="/admin/departments/add">
+                    <div class="mb-3">
+                        <label>{{ t['dept_name'] }}</label>
+                        <input type="text" name="name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>{{ t['dept_head'] }}</label>
+                        <select name="head_id" class="form-select">
+                            <option value="">{{ t['no_dept'] }}</option>
+                            {% for head in heads %}
+                            <option value="{{ head.id }}">{{ head.full_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100"><i class="fas fa-save"></i> {{ t['save'] }}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white fw-bold">{{ t['departments_manage'] }}</div>
+            <table class="table table-hover mb-0 text-center">
+                <thead class="bg-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>{{ t['dept_name'] }}</th>
+                        <th>{{ t['dept_head'] }}</th>
+                        <th>{{ t['emp_count'] }}</th>
+                        <th>{{ t['delete'] }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dept in departments %}
+                    <tr>
+                        <td>{{ dept.id }}</td>
+                        <td class="fw-bold">{{ dept.name }}</td>
+                        <td><span class="text-info fw-bold">{{ dept.head.full_name if dept.head else '--' }}</span></td>
+                        <td><span class="badge bg-secondary">{{ dept.users|length }}</span></td>
+                        <td>
+                            <a href="/admin/departments/delete/{{ dept.id }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('{{ t['confirm_delete'] }}')"><i class="fas fa-trash"></i></a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="text-center text-muted py-3">{{ t['no_depts'] }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

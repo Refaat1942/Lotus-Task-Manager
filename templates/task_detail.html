@@ -1,0 +1,154 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4 shadow-sm border-0">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-3">
+                <h5 class="mb-0"><i class="fas fa-tasks me-2"></i> #{{ task.id }} - {{ task.title }}</h5>
+                <span class="badge bg-white text-primary fw-bold px-3 py-2">
+                    {{ t['status_' ~ task.status.replace(' ', '_')] if ('status_' ~ task.status.replace(' ', '_')) in t else task.status }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <p class="mb-1 text-muted small">{{ t['creator'] }}</p>
+                        <h6 class="fw-bold"><i class="fas fa-user-tie text-primary"></i> {{ task.creator.full_name }}</h6>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="mb-1 text-muted small">{{ t['assignee'] }}</p>
+                        <h6 class="fw-bold"><i class="fas fa-user text-success"></i> {{ task.assignee.full_name }}</h6>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="mb-1 text-muted small">{{ t['head_cc'] }}</p>
+                        <h6 class="fw-bold text-info"><i class="fas fa-eye"></i> {{ task.head.full_name if task.head else '--' }}</h6>
+                    </div>
+                </div>
+                <div class="row mb-3 border-top pt-3">
+                    <div class="col-md-4">
+                        <p class="mb-1 text-muted small"><i class="far fa-calendar-alt"></i> تاريخ الإنشاء</p>
+                        <h6>{{ task.created_at.strftime('%Y-%m-%d %I:%M %p') }}</h6>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="mb-1 text-muted small text-danger">{{ t['deadline'] }}</p>
+                        <h6 class="text-danger fw-bold"><i class="fas fa-clock"></i> {{ task.deadline.strftime('%Y-%m-%d %I:%M %p') if task.deadline else t['no_deadline'] }}</h6>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="mb-1 text-muted small">{{ t['priority'] }}</p>
+                        <span class="badge {{ 'bg-danger' if task.priority in ['High', 'Urgent'] else 'bg-warning text-dark' }}">{{ task.priority }}</span>
+                    </div>
+                </div>
+                <hr>
+                <h6 class="text-secondary fw-bold">{{ t['description'] }}:</h6>
+                <div class="alert alert-light border text-dark" style="white-space: pre-wrap;">{{ task.description }}</div>
+                
+                {% if task.attachment %}
+                <div class="mt-3">
+                    <a href="/static/uploads/{{ task.attachment }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-download"></i> {{ t['attachment'] }}
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-dark text-white py-3">
+                <i class="fas fa-history me-2"></i> {{ t['history_updates'] }}
+            </div>
+            <div class="card-body bg-light" style="max-height: 600px; overflow-y: auto;">
+                {% for update in task.updates %}
+                <div class="d-flex mb-4">
+                    <div class="flex-shrink-0">
+                        <img src="https://ui-avatars.com/api/?name={{ update.user.full_name }}&background=random" class="rounded-circle shadow-sm" width="45">
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <div class="bg-white p-3 rounded-3 shadow-sm {% if update.user.role == 'head' %}border-start border-4 border-info{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <strong class="{{ 'text-info' if update.user.role == 'head' else 'text-primary' }}">
+                                        {{ update.user.full_name }} ({{ update.user.role | capitalize }})
+                                        {% if update.is_note %}<span class="badge bg-info ms-2">{{ t['admin_note'] }}</span>{% endif %}
+                                    </strong>
+                                    <small class="text-muted mx-2"><i class="far fa-clock"></i> {{ update.created_at.strftime('%Y-%m-%d | %I:%M %p') }}</small>
+                                </div>
+                            </div>
+                            <p class="mb-1 text-dark" style="white-space: pre-wrap;">{{ update.content }}</p>
+                            
+                            {% if update.filename %}
+                            <div class="mt-2 border-top pt-2">
+                                <a href="/static/uploads/{{ update.filename }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-paperclip"></i> {{ t['attachment_label'] }} {{ update.filename }}
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-5 text-muted">{{ t['no_tasks'] | default('لا توجد تحديثات') }}</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 sticky-top" style="top: 20px; z-index: 99;">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold">{{ t['add_update'] }}</h5>
+            </div>
+            
+            <div class="card-body">
+                {% if task.status in ['Closed', 'Overdue_Closed', 'Closed_by_System'] %}
+                    <div class="alert alert-danger text-center mb-0 shadow-sm border-0">
+                        <i class="fas fa-lock fa-3x mb-3 text-danger opacity-75"></i>
+                        <h6 class="fw-bold mb-0">المهمة مغلقة نهائياً ولا يمكن تعديل حالتها أو إضافة تحديثات.</h6>
+                    </div>
+                {% else %}
+                    <form method="POST" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label class="form-label small text-muted fw-bold">تغيير حالة المهمة ({{ t['status'] }})</label>
+                            <select name="status" class="form-select border-primary shadow-sm">
+                                <option value="{{ task.status }}" selected>{{ t['status_' ~ task.status.replace(' ', '_')] if ('status_' ~ task.status.replace(' ', '_')) in t else task.status }} {{ t['current_status'] }}</option>
+                                <option value="New">{{ t['status_New'] }}</option>
+                                <option value="In Progress">{{ t['status_In Progress'] }}</option>
+                                <option value="Under Review">{{ t['status_Under Review'] }}</option>
+                                <option value="Completed">{{ t['status_Completed'] }}</option>
+                                {% if current_user.role in ['admin', 'head', 'Manager', 'CEO'] %}
+                                <option value="Closed">{{ t['status_Closed'] }}</option>
+                                {% endif %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">{{ t['description'] }}</label>
+                            <textarea name="content" class="form-control" rows="4" placeholder="..." required></textarea>
+                        </div>
+
+                        {% if current_user.role in ['admin', 'head', 'Manager', 'CEO'] %}
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="is_note" id="isNote">
+                            <label class="form-check-label text-info fw-bold" for="isNote">
+                                {{ t['admin_note'] }}
+                            </label>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label small text-muted"><i class="fas fa-paperclip"></i> {{ t['attachment'] }}</label>
+                            <input type="file" name="file" class="form-control form-control-sm">
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary fw-bold btn-lg shadow-sm">
+                                <i class="fas fa-save me-2"></i> حفظ الحالة وإرسال التحديث
+                            </button>
+                        </div>
+                    </form>
+                {% endif %}
+            </div>
+            
+        </div>
+    </div>
+</div>
+{% endblock %}

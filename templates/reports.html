@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold"><i class="fas fa-chart-line text-primary"></i> {{ t['reports_title'] }}</h2>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card text-center p-4 shadow-sm border-0 h-100 border-top border-4 border-success">
+            <h4 class="fw-bold text-success"><i class="fas fa-users mb-2"></i><br>{{ t['emp_report'] }}</h4>
+            <p class="text-muted">{{ t['emp_report_desc'] }}</p>
+            <a href="/reports/export/users" class="btn btn-success mt-auto"><i class="fas fa-file-excel"></i> {{ t['download_excel'] }}</a>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card text-center p-4 shadow-sm border-0 h-100 border-top border-4 border-primary">
+            <h4 class="fw-bold text-primary"><i class="fas fa-tasks mb-2"></i><br>{{ t['tasks_report'] }}</h4>
+            <p class="text-muted">{{ t['tasks_report_desc'] }}</p>
+            <a href="/reports/export/tasks_all" class="btn btn-primary mt-auto"><i class="fas fa-file-excel"></i> {{ t['download_excel'] }}</a>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card text-center p-4 shadow-sm border-0 h-100 border-top border-4 border-danger">
+            <h4 class="fw-bold text-danger"><i class="fas fa-exclamation-circle mb-2"></i><br>{{ t['overdue_report'] }}</h4>
+            <p class="text-muted">{{ t['overdue_report_desc'] }}</p>
+            <a href="/reports/export/tasks_overdue" class="btn btn-danger mt-auto"><i class="fas fa-file-excel"></i> {{ t['download_excel'] }}</a>
+        </div>
+    </div>
+</div>
+
+<div class="mt-5 text-center">
+    <a href="/dashboard" class="btn btn-dark btn-lg"><i class="fas fa-tachometer-alt"></i> {{ t['back_dashboard'] }}</a>
+</div>
+{% endblock %}

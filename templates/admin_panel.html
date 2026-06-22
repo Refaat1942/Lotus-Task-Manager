@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2 class="mb-4">🛡 {{ t['admin_panel_title'] }}</h2>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card p-3">
+            <h4>{{ t['add_new_user'] }}</h4>
+            <form action="/admin/add_user" method="POST">
+                <div class="mb-2"><input type="text" name="username" placeholder="{{ t['username'] }}" class="form-control" required></div>
+                <div class="mb-2"><input type="password" name="password" placeholder="{{ t['password'] }}" class="form-control" required></div>
+                <div class="mb-2 form-check">
+                    <input type="checkbox" name="can_reports" class="form-check-input" id="rep">
+                    <label class="form-check-label" for="rep">{{ t['can_reports'] }}</label>
+                </div>
+                <div class="mb-2 form-check">
+                    <input type="checkbox" name="can_excel" class="form-check-input" id="exc">
+                    <label class="form-check-label" for="exc">{{ t['can_excel'] }}</label>
+                </div>
+                <button type="submit" class="btn btn-primary">{{ t['add_btn'] }}</button>
+            </form>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card p-3">
+            <h4>{{ t['current_users'] }}</h4>
+            <ul class="list-group">
+                {% for u in users %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    {{ u.username }} 
+                    <span class="badge bg-secondary">{{ u.role }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
