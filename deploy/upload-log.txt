@@ -1,0 +1,8 @@
+============================================ 
+Lotus Task Manager Upload 
+Date: Mon 06/22/2026 18:11:57.05 
+SCP: C:\WINDOWS\System32\OpenSSH\scp.exe 
+Project: D:\Refaat\My Projects\Lotus-Task-Manager 
+============================================ 
+The system cannot find the path specified.
+        0 file(s) copied.

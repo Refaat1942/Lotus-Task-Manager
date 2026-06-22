@@ -13,9 +13,9 @@ import xlsxwriter
 import pandas as pd
 from sqlalchemy import text
 
-APP_VERSION = '2.1.2'
+APP_VERSION = '2.2.0'
 APP_NAME = 'Lotus Task Manager'
-APP_PORT = 11000
+APP_PORT = 5000
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key_here'

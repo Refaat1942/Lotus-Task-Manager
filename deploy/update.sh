@@ -2,7 +2,7 @@
 # Run on VPS after uploading files to /root/taskmanager
 set -e
 APP_DIR="/root/taskmanager"
-APP_PORT=11000
+APP_PORT=5000
 cd "$APP_DIR"
 
 mkdir -p /root/backups instance static/uploads
