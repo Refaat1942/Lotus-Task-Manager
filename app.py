@@ -13,8 +13,9 @@ import xlsxwriter
 import pandas as pd
 from sqlalchemy import text
 
-APP_VERSION = '2.1.1'
+APP_VERSION = '2.1.2'
 APP_NAME = 'Lotus Task Manager'
+APP_PORT = 11000
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key_here'
@@ -754,4 +755,4 @@ if __name__ == '__main__':
             admin_user.full_name = 'المدير العام'  # تقدر تغير اسم المدير من هنا بعدين براحتك
         db.session.commit()
         
-    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+    app.run(host='0.0.0.0', port=APP_PORT, debug=False, use_reloader=False)

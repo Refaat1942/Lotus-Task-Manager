@@ -2,6 +2,7 @@
 # Run on VPS after uploading files to /root/taskmanager
 set -e
 APP_DIR="/root/taskmanager"
+APP_PORT=11000
 cd "$APP_DIR"
 
 mkdir -p /root/backups instance static/uploads
@@ -18,10 +19,10 @@ with app.app_context():
     print('Lotus Task Manager v' + APP_VERSION + ' - DB OK')
 "
 
-kill $(lsof -t -i:5000) 2>/dev/null || true
+kill $(lsof -t -i:${APP_PORT}) 2>/dev/null || true
 sleep 2
 nohup python app.py > app.log 2>&1 &
 sleep 2
-echo "--- Running ---"
-lsof -i :5000 || true
+echo "--- Running on port ${APP_PORT} ---"
+lsof -i :${APP_PORT} || true
 tail -8 app.log
