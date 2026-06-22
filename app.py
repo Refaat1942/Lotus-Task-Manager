@@ -13,7 +13,7 @@ import xlsxwriter
 import pandas as pd
 from sqlalchemy import text
 
-APP_VERSION = '2.3.0'
+APP_VERSION = '2.3.1'
 APP_NAME = 'Lotus Task Manager'
 APP_PORT = 5000
 
@@ -191,7 +191,7 @@ def inject_translations():
             'change_password': 'Change Password', 'current_password': 'Current Password', 'new_password': 'New Password',
             'assign_to': 'Assign To', 'permissions_manage': 'Visibility Settings', 'permissions_title': 'Feature Visibility Control',
             'permissions_desc': 'Choose which roles can see each section for all users.', 'notif_title': 'Notifications', 'notif_empty': 'No new notifications',
-            'deadline_passed': 'Deadline Passed', 'deadline_passed_msg': 'Task deadline has passed', 'confirm_datetime': 'OK', 'select_datetime': 'Select date & time',
+            'deadline_passed': 'Deadline Passed', 'deadline_passed_msg': 'Task deadline has passed', 'confirm_datetime': 'Pick date & time, then press OK to confirm', 'select_datetime': 'Select date & time',
             'user_updated': 'User updated successfully', 'user_update_error': 'Could not update user (username may already exist)',
             'overview': 'Overview', 'recent_tasks': 'Recent Tasks', 'view_all': 'View All', 'open': 'Open', 'no_tasks': 'No tasks found',
             'welcome': 'Welcome', 'brand_tagline': 'Smart Task Management'
@@ -208,7 +208,7 @@ def inject_translations():
             'change_password': 'تغيير كلمة المرور', 'current_password': 'كلمة المرور الحالية', 'new_password': 'كلمة المرور الجديدة',
             'assign_to': 'إسناد إلى', 'permissions_manage': 'إعدادات الظهور', 'permissions_title': 'التحكم في ظهور الأقسام',
             'permissions_desc': 'حدد الأدوار التي يمكنها رؤية كل قسم لجميع المستخدمين.', 'notif_title': 'الإشعارات', 'notif_empty': 'لا توجد إشعارات جديدة',
-            'deadline_passed': 'انتهى الموعد', 'deadline_passed_msg': 'تجاوزت المهمة الموعد المحدد', 'confirm_datetime': 'موافق', 'select_datetime': 'اختر التاريخ والوقت',
+            'deadline_passed': 'انتهى الموعد', 'deadline_passed_msg': 'تجاوزت المهمة الموعد المحدد', 'confirm_datetime': 'اختر التاريخ والوقت ثم اضغط موافق للتأكيد', 'select_datetime': 'اختر التاريخ والوقت',
             'user_updated': 'تم تحديث بيانات الموظف بنجاح', 'user_update_error': 'تعذر التحديث (اسم المستخدم قد يكون مستخدماً)',
             'overview': 'نظرة عامة', 'recent_tasks': 'أحدث المهام', 'view_all': 'عرض الكل', 'open': 'مفتوحة', 'no_tasks': 'لا توجد مهام',
             'welcome': 'مرحباً', 'brand_tagline': 'إدارة مهام ذكية'

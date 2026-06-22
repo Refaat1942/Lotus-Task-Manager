@@ -42,9 +42,32 @@
             z-index: 0;
         }
 
+        @keyframes ltm-logo-float {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-10px) scale(1.05); }
+        }
+        @keyframes ltm-logo-glow {
+            0%, 100% { filter: drop-shadow(0 10px 28px rgba(5, 150, 105, 0.28)); }
+            50% { filter: drop-shadow(0 16px 40px rgba(37, 99, 235, 0.38)); }
+        }
+        .ltm-logo-wrap {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.5rem;
+        }
+        .ltm-logo-animated {
+            animation: ltm-logo-float 3.2s ease-in-out infinite, ltm-logo-glow 4s ease-in-out infinite;
+            transition: transform 0.35s ease;
+        }
+        .ltm-logo-wrap:hover .ltm-logo-animated {
+            animation-play-state: paused;
+            transform: scale(1.1);
+        }
+
         .login-container {
             width: 100%;
-            max-width: 440px;
+            max-width: 520px;
             padding: 20px;
             position: relative;
             z-index: 1;
@@ -52,23 +75,28 @@
 
         .login-brand-strip {
             text-align: center;
-            margin-bottom: 1.25rem;
+            margin-bottom: 1.5rem;
+            padding: 2rem 1.5rem 1.75rem;
+            background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(240,253,244,0.92) 50%, rgba(239,246,255,0.92) 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
         }
         .login-brand-strip .logo-img {
-            width: 110px;
+            width: 190px;
             height: auto;
+            max-height: 190px;
             object-fit: contain;
-            margin-bottom: 0.75rem;
-            filter: drop-shadow(0 4px 12px rgba(15, 23, 42, 0.08));
         }
         .login-brand-strip .brand-name {
-            font-size: 1.35rem;
+            font-size: 1.75rem;
             font-weight: 700;
             color: #0f172a;
-            margin-bottom: 0.15rem;
+            margin-bottom: 0.35rem;
+            letter-spacing: -0.02em;
         }
         .login-brand-strip .brand-tagline {
-            font-size: 0.85rem;
+            font-size: 1rem;
             color: var(--ltm-green);
             font-weight: 600;
         }
@@ -151,7 +179,9 @@
 
     <div class="login-container">
         <div class="login-brand-strip">
-            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Lotus Logo" class="logo-img" onerror="this.style.display='none'">
+            <div class="ltm-logo-wrap">
+                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Lotus Logo" class="logo-img ltm-logo-animated" onerror="this.closest('.ltm-logo-wrap').style.display='none'">
+            </div>
             <div class="brand-name">{{ t['login_title'] }}</div>
             <div class="brand-tagline">{{ t['brand_tagline'] }}</div>
         </div>

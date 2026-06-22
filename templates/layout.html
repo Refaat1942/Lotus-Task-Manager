@@ -27,6 +27,29 @@
             --ltm-sidebar-muted: #94a3b8;
             --ltm-border: #e2e8f0;
             --ltm-topbar-h: 64px;
+            --ltm-sidebar-w: 280px;
+        }
+        @keyframes ltm-logo-float {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-6px) scale(1.04); }
+        }
+        @keyframes ltm-logo-glow {
+            0%, 100% { filter: drop-shadow(0 6px 18px rgba(5, 150, 105, 0.22)); }
+            50% { filter: drop-shadow(0 10px 28px rgba(37, 99, 235, 0.32)); }
+        }
+        .ltm-logo-wrap {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.65rem;
+        }
+        .ltm-logo-animated {
+            animation: ltm-logo-float 3.2s ease-in-out infinite, ltm-logo-glow 4s ease-in-out infinite;
+            transition: transform 0.35s ease;
+        }
+        .ltm-logo-wrap:hover .ltm-logo-animated {
+            animation-play-state: paused;
+            transform: scale(1.08);
         }
         html, body { height: 100%; margin: 0; }
         body {
@@ -40,7 +63,7 @@
             height: 100vh;
             background: var(--ltm-sidebar);
             color: var(--ltm-sidebar-text);
-            width: 260px;
+            width: var(--ltm-sidebar-w);
             position: fixed;
             top: 0;
             overflow-y: auto;
@@ -61,37 +84,43 @@
             display: flex;
             flex-direction: column;
         }
-        html[dir="rtl"] .main-content { margin-right: 260px; }
-        html[dir="ltr"] .main-content { margin-left: 260px; }
+        html[dir="rtl"] .main-content { margin-right: var(--ltm-sidebar-w); }
+        html[dir="ltr"] .main-content { margin-left: var(--ltm-sidebar-w); }
         .sidebar-brand {
-            padding: 1.25rem 1rem 1rem;
+            padding: 1.75rem 1.25rem 1.5rem;
             text-align: center;
             border-bottom: 1px solid var(--ltm-border);
-            background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+            background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 55%, #eff6ff 100%);
+            min-height: 200px;
         }
         .sidebar-logo {
-            width: 72px;
+            width: 130px;
             height: auto;
+            max-height: 130px;
             object-fit: contain;
-            margin-bottom: 0.5rem;
         }
         .sidebar-brand .brand-title {
-            font-size: 0.95rem;
+            font-size: 1.2rem;
             font-weight: 700;
             color: #0f172a;
-            line-height: 1.3;
-            margin-bottom: 0.15rem;
+            line-height: 1.35;
+            margin-bottom: 0.25rem;
+            margin-top: 0.35rem;
         }
         .sidebar-brand .brand-tagline {
-            font-size: 0.68rem;
+            font-size: 0.78rem;
             color: var(--ltm-green);
             font-weight: 600;
             letter-spacing: 0.02em;
         }
         .sidebar-brand .brand-version {
-            font-size: 0.62rem;
+            font-size: 0.68rem;
             color: var(--ltm-sidebar-muted);
-            margin-top: 0.35rem;
+            margin-top: 0.5rem;
+            display: inline-block;
+            padding: 0.15rem 0.55rem;
+            background: #f1f5f9;
+            border-radius: 999px;
         }
         .sidebar-section {
             font-size: 0.65rem;
@@ -244,7 +273,9 @@
     {% if current_user.is_authenticated %}
     <div class="sidebar d-flex flex-column" id="sidebar">
         <div class="sidebar-brand">
-            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Lotus" class="sidebar-logo" onerror="this.style.display='none'">
+            <div class="ltm-logo-wrap">
+                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Lotus" class="sidebar-logo ltm-logo-animated" onerror="this.closest('.ltm-logo-wrap').style.display='none'">
+            </div>
             <div class="brand-title">{{ t['system_title'] }}</div>
             <div class="brand-tagline">{{ t['brand_tagline'] }}</div>
             <div class="brand-version">v{{ app_version }}</div>

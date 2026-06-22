@@ -2,6 +2,35 @@
 {% block content %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/confirmDate/confirmDate.css">
+
+<style>
+    .flatpickr-confirm {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        width: calc(100% - 16px) !important;
+        margin: 8px !important;
+        padding: 0.65rem 1rem !important;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+        color: #fff !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        border: none !important;
+        border-radius: 8px !important;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .flatpickr-confirm:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.45);
+    }
+    .flatpickr-calendar.hasTime .flatpickr-time {
+        border-top: 1px solid #e2e8f0;
+    }
+</style>
 
 <div class="row justify-content-center">
     <div class="col-md-9">
@@ -34,9 +63,9 @@
 
                         <div class="col-md-6">
                             <label class="form-label fw-bold text-primary"><i class="fas fa-clock"></i> {{ t['deadline'] }}</label>
-                            <input type="text" id="deadlinePicker" class="form-control border-primary" placeholder="{{ t['select_datetime'] }}" readonly>
+                            <input type="text" id="deadlinePicker" class="form-control border-primary" placeholder="{{ t['select_datetime'] }}" readonly autocomplete="off">
                             <input type="hidden" name="deadline" id="deadlineHidden">
-                            <small class="text-muted">{{ t['confirm_datetime'] }} = {{ t['select_datetime'] }}</small>
+                            <small class="text-muted d-block mt-1"><i class="fas fa-info-circle"></i> {{ t['confirm_datetime'] }}</small>
                         </div>
                     </div>
 
@@ -85,31 +114,44 @@
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/confirmDate/confirmDate.js"></script>
 <script>
-const lang = "{{ lang }}";
-const fp = flatpickr("#deadlinePicker", {
-    enableTime: true,
-    time_24hr: true,
-    dateFormat: "Y-m-d H:i",
-    minDate: "today",
-    allowInput: false,
-    disableMobile: true,
-    plugins: [new confirmDatePlugin({
-        confirmIcon: "<i class='fas fa-check'></i>",
-        confirmText: lang === 'ar' ? 'موافق' : 'OK',
-        showAlways: true,
-        theme: "light"
-    })],
-    onChange: function(selectedDates, dateStr) {
-        if (selectedDates.length) {
-            const d = selectedDates[0];
-            const pad = n => String(n).padStart(2, '0');
-            document.getElementById('deadlineHidden').value =
-                d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) +
-                'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
-        } else {
-            document.getElementById('deadlineHidden').value = '';
+document.addEventListener('DOMContentLoaded', function() {
+    const lang = "{{ lang }}";
+    const okLabel = lang === 'ar' ? 'موافق' : 'OK';
+    const hiddenInput = document.getElementById('deadlineHidden');
+
+    function syncDeadlineHidden(selectedDates) {
+        if (!selectedDates || !selectedDates.length) {
+            hiddenInput.value = '';
+            return;
         }
+        const d = selectedDates[0];
+        const pad = n => String(n).padStart(2, '0');
+        hiddenInput.value =
+            d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+            'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
     }
+
+    flatpickr("#deadlinePicker", {
+        enableTime: true,
+        time_24hr: true,
+        dateFormat: "Y-m-d H:i",
+        minDate: "today",
+        allowInput: false,
+        disableMobile: true,
+        closeOnSelect: false,
+        plugins: [new confirmDatePlugin({
+            confirmIcon: "<i class='fas fa-check'></i>",
+            confirmText: okLabel + " ",
+            showAlways: true,
+            theme: "light"
+        })],
+        onClose: function(selectedDates) {
+            syncDeadlineHidden(selectedDates);
+        },
+        onReady: function(selectedDates, _dateStr, instance) {
+            instance.calendarContainer.classList.add('ltm-deadline-picker');
+        }
+    });
 });
 </script>
 {% endblock %}
