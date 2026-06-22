@@ -336,6 +336,9 @@
         <a href="/admin/hierarchy"><i class="fas fa-sitemap fa-fw mx-2"></i> {{ t['hierarchy_manage'] }}</a>
         {% endif %}
         <a href="/admin/permissions"><i class="fas fa-eye fa-fw mx-2"></i> {{ t['permissions_manage'] }}</a>
+        {% if current_user.role == 'admin' %}
+        <a href="/admin/settings"><i class="fas fa-sliders-h fa-fw mx-2"></i> {{ t['settings_title'] }}</a>
+        {% endif %}
         {% endif %}
         </div>
         

@@ -76,9 +76,14 @@ TRANSLATIONS = {
         'filter_progress': 'In Progress',
         'filter_review': 'Under Review',
         'filter_completed': 'Completed',
+        'filter_canceled': 'Canceled',
         'filter_closed': 'Closed',
         'unassigned': 'Unassigned',
         'system_note_auto_close': 'System: Task auto-closed — assignee did not open within 10 minutes.',
+        'system_note_auto_cancel': 'System: Task canceled — assignee did not open within {minutes} minutes.',
+        'system_note_task_opened': 'Assignee opened the task and started working.',
+        'system_note_deadline': 'Reminder: task deadline has passed.',
+        'system_note_status_change': 'Status changed to: {status}',
         'system_note_overdue_close': 'System: Task closed automatically — deadline passed.',
         'task_title': 'Task Title',
         'creator': 'Created By',
@@ -113,6 +118,7 @@ TRANSLATIONS = {
         'status_New': 'New',
         'status_In Progress': 'In Progress',
         'status_Completed': 'Completed',
+        'status_Canceled': 'Canceled',
         'status_Under Review': 'Under Review',
         'status_Closed': 'Closed',
         'status_Overdue_Closed': 'Closed (deadline passed)',
@@ -175,11 +181,21 @@ TRANSLATIONS = {
         'notif_task_opened': 'Task Opened',
         'notif_account_updated': 'Account Updated',
         'notif_account_updated_msg': 'Your account was updated by an administrator',
-        'notif_auto_closed': 'Auto-closed',
+        'settings_title': 'Task Rules',
+        'settings_desc': 'Configure automatic task behavior.',
+        'auto_cancel_minutes': 'Cancel if not opened within (minutes)',
+        'auto_cancel_help': 'If the assignee does not open the task within this time, it is automatically canceled.',
+        'settings_saved': 'Settings saved successfully',
+        'settings_invalid': 'Invalid value — enter a number between 1 and 1440',
+        'chat_title': 'Task Chat',
+        'chat_placeholder': 'Type a message…',
+        'send_message': 'Send',
+        'awaiting_open': 'Awaiting assignee to open',
         'feature_col': 'Feature',
         'alert_settings': 'Notification Settings',
         'admin_panel_title': 'Admin Dashboard',
         'add_new_user': 'Add New User',
+        'notif_auto_closed': 'Auto-canceled',
         'can_reports': 'Reports Access',
         'can_excel': 'Excel Access',
         'current_users': 'Current Users',
@@ -281,10 +297,14 @@ TRANSLATIONS = {
         'filter_progress': 'قيد التنفيذ',
         'filter_review': 'قيد المراجعة',
         'filter_completed': 'مكتملة',
+        'filter_canceled': 'ملغاة',
         'filter_closed': 'مغلقة',
         'unassigned': 'غير مُسند',
         'system_note_auto_close': 'النظام: تم الإغلاق آلياً — لم يفتح المُكلف المهمة خلال 10 دقائق.',
-        'system_note_overdue_close': 'النظام: تم الإغلاق آلياً — انتهى موعد الاستحقاق.',
+        'system_note_auto_cancel': 'النظام: تم الإلغاء — لم يفتح المُكلف المهمة خلال {minutes} دقيقة.',
+        'system_note_task_opened': 'فتح المُكلف المهمة وبدأ العمل عليها.',
+        'system_note_deadline': 'تذكير: انتهى موعد استحقاق المهمة.',
+        'system_note_status_change': 'تم تغيير الحالة إلى: {status}',
         'task_title': 'عنوان المهمة',
         'creator': 'منشئ المهمة',
         'assignee': 'المُكلف بالمهمة',
@@ -318,6 +338,7 @@ TRANSLATIONS = {
         'status_New': 'جديدة',
         'status_In Progress': 'قيد التنفيذ',
         'status_Completed': 'مكتملة',
+        'status_Canceled': 'ملغاة',
         'status_Under Review': 'قيد المراجعة',
         'status_Closed': 'مغلقة',
         'status_Overdue_Closed': 'مغلقة (انتهى الموعد)',
@@ -378,6 +399,16 @@ TRANSLATIONS = {
         'notif_new_task_cc': 'مهمة جديدة (نسخة)',
         'notif_task_update': 'تحديث مهمة',
         'notif_task_opened': 'تم فتح المهمة',
+        'settings_title': 'قواعد المهام',
+        'settings_desc': 'ضبط السلوك التلقائي للمهام.',
+        'auto_cancel_minutes': 'إلغاء المهمة إذا لم تُفتح خلال (دقيقة)',
+        'auto_cancel_help': 'إذا لم يفتح المُكلف المهمة خلال هذا الوقت، تُلغى تلقائياً.',
+        'settings_saved': 'تم حفظ الإعدادات بنجاح',
+        'settings_invalid': 'قيمة غير صالحة — أدخل رقماً بين 1 و 1440',
+        'chat_title': 'محادثة المهمة',
+        'chat_placeholder': 'اكتب رسالة…',
+        'send_message': 'إرسال',
+        'awaiting_open': 'بانتظار فتح المُكلف للمهمة',
         'notif_account_updated': 'تحديث الحساب',
         'notif_account_updated_msg': 'تم تحديث بيانات حسابك بواسطة الإدارة',
         'notif_auto_closed': 'إغلاق آلي',
@@ -420,8 +451,22 @@ USER_NAME_I18N = {
 
 SYSTEM_UPDATE_MAP = {
     '[SYS:auto_close_10m]': 'system_note_auto_close',
+    '[SYS:auto_cancel]': 'system_note_auto_cancel',
     '[SYS:overdue_close]': 'system_note_overdue_close',
+    '[SYS:deadline_notified]': 'system_note_deadline',
+    '[SYS:task_opened]': 'system_note_task_opened',
 }
+
+STATUS_NORMALIZE = {
+    'New': 'In Progress', 'Under Review': 'In Progress',
+    'Closed': 'Canceled', 'Closed_by_System': 'Canceled', 'Overdue_Closed': 'Canceled',
+}
+
+
+def normalize_status(status_code):
+    if not status_code:
+        return ''
+    return STATUS_NORMALIZE.get(status_code, status_code)
 
 
 def _bundle():
@@ -446,9 +491,10 @@ def t(key):
 def status_label(status_code):
     if not status_code:
         return ''
-    key = 'status_' + str(status_code).replace(' ', '_')
+    normalized = normalize_status(status_code)
+    key = 'status_' + str(normalized).replace(' ', '_')
     bundle = _bundle()
-    return bundle.get(key, TRANSLATIONS['en'].get(key, status_code))
+    return bundle.get(key, TRANSLATIONS['en'].get(key, normalized))
 
 
 def priority_label(priority):
@@ -474,13 +520,25 @@ def update_content(text):
     if not text:
         return ''
     bundle = _bundle()
-    key = SYSTEM_UPDATE_MAP.get(text.strip())
+    text = text.strip()
+    key = SYSTEM_UPDATE_MAP.get(text)
     if key:
+        if key == 'system_note_auto_cancel':
+            minutes = 10
+            try:
+                from app import get_auto_cancel_minutes
+                minutes = get_auto_cancel_minutes()
+            except Exception:
+                pass
+            return bundle.get(key, text).format(minutes=minutes)
         return bundle.get(key, text)
-    if '[إجراء تلقائي]' in text or 'إغلاق' in text and '10 دقائق' in text:
+    if text.startswith('[SYS:status_change:'):
+        st = text.replace('[SYS:status_change:', '').rstrip(']')
+        return bundle.get('system_note_status_change', text).format(status=status_label(st))
+    if '[إجراء تلقائي]' in text or ('إغلاق' in text and '10 دقائق' in text):
         return bundle.get('system_note_auto_close', text)
     if '[إجراء تلقائي]' in text and ('Deadline' in text or 'الموعد' in text):
-        return bundle.get('system_note_overdue_close', text)
+        return bundle.get('system_note_overdue_close', bundle.get('system_note_deadline', text))
     return text
 
 

@@ -12,9 +12,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import xlsxwriter
 import pandas as pd
 from sqlalchemy import text
-from i18n import TRANSLATIONS, t as tr, flash_t, status_label, priority_label, localized_user_name, update_content
+from i18n import TRANSLATIONS, t as tr, flash_t, status_label, priority_label, localized_user_name, update_content, normalize_status
 
-APP_VERSION = '2.4.1'
+APP_VERSION = '2.5.0'
 APP_NAME = 'Lotus Task Manager'
 APP_PORT = 5000
 
@@ -88,9 +88,10 @@ class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200))
     description = db.Column(db.Text)
-    status = db.Column(db.String(50), default='New')
+    status = db.Column(db.String(50), default='In Progress')
     priority = db.Column(db.String(50))
     created_at = db.Column(db.DateTime, default=datetime.now)
+    opened_at = db.Column(db.DateTime, nullable=True)
     started_at = db.Column(db.DateTime, nullable=True)     
     completed_at = db.Column(db.DateTime, nullable=True)   
     deadline = db.Column(db.DateTime, nullable=True)
@@ -105,13 +106,21 @@ class Task(db.Model):
     creator = db.relationship('User', foreign_keys=[creator_id])
     assignee = db.relationship('User', foreign_keys=[assignee_id])
     head = db.relationship('User', foreign_keys=[head_id])
-    updates = db.relationship('TaskUpdate', backref='task', lazy=True, cascade="all, delete-orphan")
+    updates = db.relationship('TaskUpdate', backref='task', lazy=True, cascade="all, delete-orphan", order_by='TaskUpdate.created_at')
     
     @property
     def is_overdue(self):
-        if self.deadline and self.status not in ['Completed', 'Closed', 'Closed_by_System', 'Overdue_Closed']:
+        if self.deadline and normalize_status(self.status) not in ['Completed', 'Canceled']:
             return datetime.now() > self.deadline
         return False
+
+    @property
+    def display_status(self):
+        return normalize_status(self.status)
+
+    @property
+    def is_terminal(self):
+        return normalize_status(self.status) in ['Completed', 'Canceled']
 
 class TaskUpdate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -139,6 +148,37 @@ class FeatureVisibility(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     feature_key = db.Column(db.String(50), unique=True, nullable=False)
     allowed_roles = db.Column(db.Text)
+
+class AppSetting(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(50), unique=True, nullable=False)
+    value = db.Column(db.String(200))
+
+TERMINAL_STATUSES = ['Completed', 'Canceled', 'Closed', 'Closed_by_System', 'Overdue_Closed']
+LEGACY_CANCELED = ['Canceled', 'Closed', 'Closed_by_System', 'Overdue_Closed']
+ACTIVE_STATUSES = ['In Progress', 'New', 'Under Review']
+
+def get_setting(key, default=''):
+    row = AppSetting.query.filter_by(key=key).first()
+    return row.value if row else default
+
+def set_setting(key, value):
+    row = AppSetting.query.filter_by(key=key).first()
+    if row:
+        row.value = str(value)
+    else:
+        db.session.add(AppSetting(key=key, value=str(value)))
+
+def get_auto_cancel_minutes():
+    try:
+        return max(1, int(get_setting('auto_cancel_minutes', '10')))
+    except ValueError:
+        return 10
+
+def seed_app_settings():
+    if not AppSetting.query.filter_by(key='auto_cancel_minutes').first():
+        db.session.add(AppSetting(key='auto_cancel_minutes', value='10'))
+    db.session.commit()
 
 @login_manager.user_loader
 def load_user(user_id): return User.query.get(int(user_id))
@@ -198,17 +238,22 @@ def automated_system_checks():
     with app.app_context():
         now = datetime.now()
         
-        # 1. فحص الـ 10 دقائق (المهام الجديدة التي لم تفتح)
-        ten_mins_ago = now - timedelta(minutes=10)
-        neglected_tasks = Task.query.filter(Task.status == 'New', Task.created_at <= ten_mins_ago).all()
+        minutes = get_auto_cancel_minutes()
+        cutoff = now - timedelta(minutes=minutes)
+        neglected_tasks = Task.query.filter(
+            Task.opened_at.is_(None),
+            Task.status.in_(ACTIVE_STATUSES),
+            Task.created_at <= cutoff
+        ).all()
         for task in neglected_tasks:
-            task.status = 'Closed_by_System'
-            db.session.add(TaskUpdate(content="[SYS:auto_close_10m]", is_note=True, task_id=task.id, user_id=task.creator_id))
+            task.status = 'Canceled'
+            task.completed_at = now
+            db.session.add(TaskUpdate(content="[SYS:auto_cancel]", is_note=True, task_id=task.id, user_id=task.creator_id))
             if task.creator_id:
                 create_notification(
                     task.creator_id, 'task_update',
                     f"{TRANSLATIONS['ar']['notif_auto_closed']} / {TRANSLATIONS['en']['notif_auto_closed']}",
-                    f"{TRANSLATIONS['ar']['system_note_auto_close']} / {TRANSLATIONS['en']['system_note_auto_close']}",
+                    TRANSLATIONS['en']['system_note_auto_cancel'].format(minutes=minutes),
                     link=f'/tasks/{task.id}', task_id=task.id
                 )
             try:
@@ -216,16 +261,21 @@ def automated_system_checks():
                 cc_list = [task.head.email] if (task.head and task.head.email) else []
                 if recipients:
                     msg = Message(f"Urgent: Auto-closed task #{task.id}", sender=app.config['MAIL_USERNAME'], recipients=recipients, cc=cc_list)
-                    msg.body = TRANSLATIONS['en']['system_note_auto_close'] + f"\nTask: {task.title}\nAssignee: {task.assignee.full_name if task.assignee else '--'}"
+                    msg.body = TRANSLATIONS['en']['system_note_auto_cancel'].format(minutes=minutes) + f"\nTask: {task.title}\nAssignee: {task.assignee.full_name if task.assignee else '--'}"
                     mail.send(msg)
             except: pass
 
-        # 2. فحص الديدلاين (Overdue)
-        overdue_tasks = Task.query.filter(Task.deadline < now, Task.status.notin_(['Completed', 'Closed', 'Closed_by_System', 'Overdue_Closed'])).all()
+        # 2. Deadline alerts (notify only — status stays In Progress)
+        overdue_tasks = Task.query.filter(
+            Task.deadline < now,
+            Task.status.in_(ACTIVE_STATUSES + ['In Progress'])
+        ).all()
         for task in overdue_tasks:
-            task.status = 'Overdue_Closed'
-            task.completed_at = now
-            db.session.add(TaskUpdate(content="[SYS:overdue_close]", is_note=True, task_id=task.id, user_id=task.creator_id))
+            if normalize_status(task.status) in ['Completed', 'Canceled']:
+                continue
+            if TaskUpdate.query.filter_by(task_id=task.id, content='[SYS:deadline_notified]').first():
+                continue
+            db.session.add(TaskUpdate(content="[SYS:deadline_notified]", is_note=True, task_id=task.id, user_id=task.creator_id))
             if task.creator_id:
                 create_notification(
                     task.creator_id, 'deadline_passed',
@@ -244,14 +294,14 @@ def automated_system_checks():
                 if task.creator and task.creator.email:
                     cc_list = [task.head.email] if (task.head and task.head.email) else []
                     msg = Message(f"Alert: Task deadline passed #{task.id}", sender=app.config['MAIL_USERNAME'], recipients=[task.creator.email], cc=cc_list)
-                    msg.body = TRANSLATIONS['en']['system_note_overdue_close'] + f"\nTask: {task.title}\nAssignee: {task.assignee.full_name if task.assignee else '--'}"
+                    msg.body = TRANSLATIONS['en']['deadline_passed_msg'] + f"\nTask: {task.title}"
                     mail.send(msg)
             except: pass
         
         # 3. المهام المتكررة
         recurring = Task.query.filter(Task.recurrence != 'None', Task.next_run <= now).all()
         for rt in recurring:
-            new_t = Task(title=rt.title, description=rt.description, priority=rt.priority, recurrence=rt.recurrence, creator_id=rt.creator_id, assignee_id=rt.assignee_id, head_id=rt.head_id)
+            new_t = Task(title=rt.title, description=rt.description, priority=rt.priority, recurrence=rt.recurrence, creator_id=rt.creator_id, assignee_id=rt.assignee_id, head_id=rt.head_id, status='In Progress')
             if rt.recurrence == 'Daily': rt.next_run = now + timedelta(days=1)
             elif rt.recurrence == 'Weekly': rt.next_run = now + timedelta(days=7)
             elif rt.recurrence == 'Monthly': rt.next_run = now + timedelta(days=30)
@@ -307,7 +357,12 @@ def change_my_password():
 def dashboard():
     if not user_can_see('dashboard'):
         return redirect(url_for('tasks'))
-    stats = {'total_tasks': Task.query.count(), 'in_progress': Task.query.filter_by(status='In Progress').count(), 'overdue': len([task for task in Task.query.all() if task.is_overdue]), 'completed': Task.query.filter_by(status='Completed').count()}
+    stats = {
+        'total_tasks': Task.query.count(),
+        'in_progress': Task.query.filter(Task.status.in_(ACTIVE_STATUSES)).count(),
+        'overdue': len([task for task in Task.query.all() if task.is_overdue]),
+        'completed': Task.query.filter(Task.status.in_(['Completed'])).count(),
+    }
     recent = Task.query.order_by(Task.created_at.desc()).limit(5).all()
     return render_template('dashboard.html', stats=stats, recent_tasks=recent, today_date=datetime.now().strftime('%Y-%m-%d'))
 
@@ -505,6 +560,22 @@ def manage_permissions():
     settings = {s.feature_key: [r.strip() for r in s.allowed_roles.split(',') if r.strip()] for s in FeatureVisibility.query.all()}
     return render_template('manage_permissions.html', settings=settings, roles=AVAILABLE_ROLES, features=FEATURE_LABELS)
 
+@app.route('/admin/settings', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def manage_settings():
+    if request.method == 'POST':
+        try:
+            minutes = max(1, min(1440, int(request.form.get('auto_cancel_minutes', 10))))
+            set_setting('auto_cancel_minutes', minutes)
+            db.session.commit()
+            flash_t('settings_saved', 'success')
+        except ValueError:
+            flash_t('settings_invalid', 'danger')
+        return redirect(url_for('manage_settings'))
+    seed_app_settings()
+    return render_template('manage_settings.html', auto_cancel_minutes=get_auto_cancel_minutes())
+
 # --- كود الرفع المعدل والذكي للأقسام والمستخدمين ---
 @app.route('/admin/import_users', methods=['GET', 'POST'])
 @login_required
@@ -586,7 +657,14 @@ def tasks():
         flash_t('access_denied', 'danger')
         return redirect(url_for('dashboard'))
     f = request.args.get('status')
-    all_t = Task.query.filter_by(status=f).order_by(Task.created_at.desc()).all() if f else Task.query.order_by(Task.created_at.desc()).all()
+    if f == 'In Progress':
+        all_t = Task.query.filter(Task.status.in_(ACTIVE_STATUSES)).order_by(Task.created_at.desc()).all()
+    elif f == 'Canceled':
+        all_t = Task.query.filter(Task.status.in_(LEGACY_CANCELED)).order_by(Task.created_at.desc()).all()
+    elif f:
+        all_t = Task.query.filter_by(status=f).order_by(Task.created_at.desc()).all()
+    else:
+        all_t = Task.query.order_by(Task.created_at.desc()).all()
     return render_template('task_list.html', tasks=all_t)
 
 @app.route('/tasks/create', methods=['GET', 'POST'])
@@ -599,7 +677,7 @@ def create_task():
         assignee = User.query.get(request.form.get('assigned_to'))
         rule = HierarchyRule.query.filter_by(from_role=current_user.role, to_role=assignee.role).first()
         cc_user = User.query.filter_by(role=rule.cc_role, is_active=True).first() if rule and rule.cc_role else None
-        new_task = Task(title=request.form.get('title'), description=request.form.get('description'), priority=request.form.get('priority'), recurrence=request.form.get('recurrence', 'None'), creator_id=current_user.id, assignee_id=assignee.id, head_id=cc_user.id if cc_user else None)
+        new_task = Task(title=request.form.get('title'), description=request.form.get('description'), priority=request.form.get('priority'), recurrence=request.form.get('recurrence', 'None'), creator_id=current_user.id, assignee_id=assignee.id, head_id=cc_user.id if cc_user else None, status='In Progress')
         dl = request.form.get('deadline')
         if dl:
             try:
@@ -641,76 +719,105 @@ def create_task():
 @app.route('/tasks/<int:id>', methods=['GET', 'POST'])
 @login_required
 def task_detail(id):
-    t = Task.query.get_or_404(id)
-    if request.method == 'POST':
-        ns = request.form.get('status'); cnt = request.form.get('content')
-        if ns == 'Completed' and not cnt and TaskUpdate.query.filter_by(task_id=t.id, is_note=False).count() == 0:
-            flash_t('update_required', 'danger')
-            return redirect(url_for('task_detail', id=t.id))
-        
-        # تحويل حالة المهمة من "جديدة" إلى "قيد التنفيذ" إذا تم إرسال تحديث
-        if t.status == 'New' and cnt and ns == 'New': ns = 'In Progress'
-        
-        status_changed = False
-        if ns and ns != t.status:
-            if ns == 'In Progress' and not t.started_at: t.started_at = datetime.now()
-            if ns in ['Completed', 'Closed'] and not t.completed_at: t.completed_at = datetime.now()
-            t.status = ns
-            status_changed = True
-            
-        if cnt: 
-            # معالجة الملف المرفق في التحديث
-            file = request.files.get('file')
-            fname = None
-            if file and file.filename != '':
-                fname = f"update_{datetime.now().strftime('%Y%m%d%H%M%S')}_{secure_filename(file.filename)}"
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], fname))
-                
-            db.session.add(TaskUpdate(content=cnt, is_note=bool(request.form.get('is_note')), filename=fname, task_id=t.id, user_id=current_user.id))
+    task = Task.query.get_or_404(id)
+    chat_updates = TaskUpdate.query.filter_by(task_id=task.id).order_by(TaskUpdate.created_at.asc()).all()
+
+    if request.method == 'GET':
+        if current_user.id == task.assignee_id and not task.opened_at:
+            task.opened_at = datetime.now()
+            if not task.started_at:
+                task.started_at = datetime.now()
+            if task.status in ['New', 'Under Review']:
+                task.status = 'In Progress'
+            db.session.add(TaskUpdate(content="[SYS:task_opened]", is_note=True, task_id=task.id, user_id=current_user.id))
+            db.session.commit()
+            if task.creator_id and task.creator_id != current_user.id:
+                create_notification(
+                    task.creator_id, 'task_update',
+                    tr('notif_task_opened'),
+                    f"{current_user.full_name}: {task.title}",
+                    link=f'/tasks/{task.id}', task_id=task.id
+                )
+                db.session.commit()
+            chat_updates = TaskUpdate.query.filter_by(task_id=task.id).order_by(TaskUpdate.created_at.asc()).all()
+        return render_template('task_detail.html', task=task, chat_updates=chat_updates)
+
+    if task.is_terminal:
+        flash_t('task_closed_msg', 'danger')
+        return redirect(url_for('task_detail', id=task.id))
+
+    ns = request.form.get('status') or task.status
+    cnt = (request.form.get('content') or '').strip()
+
+    if ns == 'Completed' and not cnt and TaskUpdate.query.filter_by(task_id=task.id, is_note=False).count() == 0:
+        flash_t('update_required', 'danger')
+        return redirect(url_for('task_detail', id=task.id))
+
+    if ns == 'Canceled' and current_user.id not in [task.creator_id] and current_user.role not in ['admin', 'CEO']:
+        flash_t('access_denied', 'danger')
+        return redirect(url_for('task_detail', id=task.id))
+
+    if ns not in ['In Progress', 'Completed', 'Canceled']:
+        ns = 'In Progress'
+
+    status_changed = normalize_status(ns) != normalize_status(task.status)
+    if status_changed:
+        if ns == 'In Progress' and not task.started_at:
+            task.started_at = datetime.now()
+        if ns in ['Completed', 'Canceled'] and not task.completed_at:
+            task.completed_at = datetime.now()
+        task.status = ns
+
+    if not cnt and not status_changed:
+        return redirect(url_for('task_detail', id=task.id))
+
+    if cnt:
+        file = request.files.get('file')
+        fname = None
+        if file and file.filename != '':
+            fname = f"update_{datetime.now().strftime('%Y%m%d%H%M%S')}_{secure_filename(file.filename)}"
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], fname))
+        db.session.add(TaskUpdate(content=cnt, is_note=bool(request.form.get('is_note')), filename=fname, task_id=task.id, user_id=current_user.id))
+
+    if status_changed and not cnt:
+        db.session.add(TaskUpdate(content=f"[SYS:status_change:{ns}]", is_note=True, task_id=task.id, user_id=current_user.id))
+
+    db.session.commit()
+
+    if cnt or status_changed:
+        notify_ids = set()
+        if task.creator_id and task.creator_id != current_user.id:
+            notify_ids.add(task.creator_id)
+        if task.head_id and task.head_id != current_user.id:
+            notify_ids.add(task.head_id)
+        if task.assignee_id and task.assignee_id != current_user.id:
+            notify_ids.add(task.assignee_id)
+        msg_text = f"{current_user.full_name}: {task.title}"
+        if status_changed:
+            msg_text += f" → {status_label(ns)}"
+        if cnt:
+            msg_text += f" — {cnt[:80]}{'...' if len(cnt) > 80 else ''}"
+        for uid in notify_ids:
+            create_notification(
+                uid, 'task_update', tr('notif_task_update'),
+                msg_text, link=f'/tasks/{task.id}', task_id=task.id
+            )
         db.session.commit()
 
-        if cnt or status_changed:
-            notify_ids = set()
-            if t.creator_id and t.creator_id != current_user.id:
-                notify_ids.add(t.creator_id)
-            if t.head_id and t.head_id != current_user.id:
-                notify_ids.add(t.head_id)
-            if t.assignee_id and t.assignee_id != current_user.id:
-                notify_ids.add(t.assignee_id)
-            msg_text = f"{current_user.full_name}: {t.title}"
-            if status_changed:
-                msg_text += f" → {status_label(ns)}"
-            if cnt:
-                msg_text += f" — {cnt[:80]}{'...' if len(cnt) > 80 else ''}"
-            for uid in notify_ids:
-                create_notification(
-                    uid, 'task_update',
-                    tr('notif_task_update'),
-                    msg_text, link=f'/tasks/{t.id}', task_id=t.id
-                )
-            db.session.commit()
-        
-        # إرسال إيميل للمديرين عند تغيير الحالة
-        if status_changed:
-            try:
-                recipients = [t.creator.email] if t.creator.email else []
-                cc_list = [t.head.email] if (t.head and t.head.email) else []
-                if recipients:
-                    msg = Message(f"تحديث حالة مهمة: #{t.id}", sender=app.config['MAIL_USERNAME'], recipients=recipients, cc=cc_list)
-                    msg.body = f"الموظف ({current_user.full_name}) قام بتحديث حالة المهمة '{t.title}' إلى: {ns}."
-                    mail.send(msg)
-            except: pass
-
-        flash_t('update_success', 'success')
-        return redirect(url_for('task_detail', id=t.id))
-    return render_template('task_detail.html', task=t)
+    flash_t('update_success', 'success')
+    return redirect(url_for('task_detail', id=task.id))
 
 if __name__ == '__main__':
     with app.app_context(): 
         db.create_all()
         try: db.session.execute(text('ALTER TABLE user ADD COLUMN department_id INTEGER REFERENCES department(id)')); db.session.commit()
         except: pass
+        try: db.session.execute(text('ALTER TABLE task ADD COLUMN opened_at DATETIME')); db.session.commit()
+        except: pass
         seed_feature_visibility()
+        seed_app_settings()
+        Task.query.filter(Task.status == 'New').update({'status': 'In Progress'})
+        db.session.commit()
         
         # تحديث بيانات الأدمن تلقائياً لو موجود بدل مسح قاعدة البيانات
         admin_user = User.query.filter_by(username='admin').first()

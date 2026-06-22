@@ -38,10 +38,15 @@
                         <span class="badge {{ 'bg-danger' if task.priority in ['High', 'Urgent'] else 'bg-warning text-dark' }}">{{ priority_label(task.priority) }}</span>
                     </div>
                 </div>
+                {% if not task.opened_at and task.display_status == 'In Progress' %}
+                <div class="alert alert-warning py-2 mb-3 border-0">
+                    <i class="fas fa-hourglass-half me-2"></i>{{ t['awaiting_open'] }}
+                </div>
+                {% endif %}
                 <hr>
                 <h6 class="text-secondary fw-bold">{{ t['description'] }}:</h6>
                 <div class="alert alert-light border text-dark" style="white-space: pre-wrap;">{{ task.description }}</div>
-                
+
                 {% if task.attachment %}
                 <div class="mt-3">
                     <a href="/static/uploads/{{ task.attachment }}" target="_blank" class="btn btn-outline-primary btn-sm">
@@ -54,37 +59,44 @@
 
         <div class="card shadow-sm border-0">
             <div class="card-header ltm-header-green text-white py-3">
-                <i class="fas fa-history me-2"></i> {{ t['history_updates'] }}
+                <i class="fas fa-comments me-2"></i> {{ t['chat_title'] }}
             </div>
-            <div class="card-body bg-light card-scroll">
-                {% for update in task.updates %}
-                <div class="d-flex mb-4">
-                    <div class="flex-shrink-0">
-                        <img src="https://ui-avatars.com/api/?name={{ update.user.full_name }}&background=random" class="rounded-circle shadow-sm" width="45">
+            <div class="card-body bg-light card-scroll" id="taskChatThread">
+                {% for update in chat_updates %}
+                {% set is_system = update.content.startswith('[SYS:') %}
+                {% if is_system %}
+                <div class="text-center mb-3">
+                    <span class="badge bg-secondary bg-opacity-75 fw-normal px-3 py-2" style="white-space: pre-wrap; max-width: 90%; line-height: 1.5;">
+                        <i class="fas fa-robot me-1"></i>{{ update_content(update.content) }}
+                        <small class="d-block mt-1 opacity-75">{{ update.created_at.strftime('%Y-%m-%d %I:%M %p') }}</small>
+                    </span>
+                </div>
+                {% else %}
+                <div class="d-flex mb-3 {% if update.user_id == current_user.id %}flex-row-reverse{% endif %}">
+                    <div class="flex-shrink-0 {% if update.user_id == current_user.id %}ms-2{% else %}me-2{% endif %}">
+                        <img src="https://ui-avatars.com/api/?name={{ update.user.full_name }}&background=random" class="rounded-circle shadow-sm" width="40" height="40" alt="">
                     </div>
-                    <div class="flex-grow-1 ms-3">
-                        <div class="bg-white p-3 rounded-3 shadow-sm {% if update.user.role == 'head' %}border-start border-4 border-info{% endif %}">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <div>
-                                    <strong class="{{ 'text-info' if update.user.role == 'head' else 'text-primary' }}">
-                                        {{ update.user.full_name }} ({{ update.user.role | capitalize }})
-                                        {% if update.is_note %}<span class="badge bg-info ms-2">{{ t['admin_note'] }}</span>{% endif %}
-                                    </strong>
-                                    <small class="text-muted mx-2"><i class="far fa-clock"></i> {{ update.created_at.strftime('%Y-%m-%d | %I:%M %p') }}</small>
-                                </div>
+                    <div class="flex-grow-1" style="max-width: 75%;">
+                        <div class="p-3 rounded-3 shadow-sm {% if update.user_id == current_user.id %}bg-primary text-white{% else %}bg-white{% endif %} {% if update.is_note %}border border-info border-2{% endif %}">
+                            <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                                <strong class="small {% if update.user_id != current_user.id %}text-primary{% endif %}">
+                                    {{ update.user.full_name }}
+                                    {% if update.is_note %}<span class="badge bg-info ms-1">{{ t['admin_note'] }}</span>{% endif %}
+                                </strong>
+                                <small class="opacity-75 text-nowrap">{{ update.created_at.strftime('%I:%M %p') }}</small>
                             </div>
-                            <p class="mb-1 text-dark" style="white-space: pre-wrap;">{{ update_content(update.content) }}</p>
-                            
+                            <p class="mb-0" style="white-space: pre-wrap;">{{ update_content(update.content) }}</p>
                             {% if update.filename %}
-                            <div class="mt-2 border-top pt-2">
-                                <a href="/static/uploads/{{ update.filename }}" target="_blank" class="btn btn-sm btn-outline-secondary">
-                                    <i class="fas fa-paperclip"></i> {{ t['attachment_label'] }} {{ update.filename }}
+                            <div class="mt-2 pt-2 border-top">
+                                <a href="/static/uploads/{{ update.filename }}" target="_blank" class="btn btn-sm {% if update.user_id == current_user.id %}btn-light{% else %}btn-outline-secondary{% endif %}">
+                                    <i class="fas fa-paperclip"></i> {{ update.filename }}
                                 </a>
                             </div>
                             {% endif %}
                         </div>
                     </div>
                 </div>
+                {% endif %}
                 {% else %}
                 <div class="text-center py-5 text-muted">{{ t['no_updates'] }}</div>
                 {% endfor %}
@@ -97,11 +109,11 @@
             <div class="card-header bg-white py-3">
                 <h5 class="mb-0 fw-bold">{{ t['add_update'] }}</h5>
             </div>
-            
+
             <div class="card-body">
-                {% if task.status in ['Closed', 'Overdue_Closed', 'Closed_by_System'] %}
-                    <div class="alert alert-danger text-center mb-0 shadow-sm border-0">
-                        <i class="fas fa-lock fa-3x mb-3 text-danger opacity-75"></i>
+                {% if task.is_terminal %}
+                    <div class="alert alert-secondary text-center mb-0 shadow-sm border-0">
+                        <i class="fas fa-lock fa-2x mb-3 opacity-50"></i>
                         <h6 class="fw-bold mb-0">{{ t['task_closed_msg'] }}</h6>
                     </div>
                 {% else %}
@@ -109,20 +121,17 @@
                         <div class="mb-3">
                             <label class="form-label small text-muted fw-bold">{{ t['change_status'] }}</label>
                             <select name="status" class="form-select border-primary shadow-sm">
-                                <option value="{{ task.status }}" selected>{{ status_label(task.status) }} {{ t['current_status'] }}</option>
-                                <option value="New">{{ status_label('New') }}</option>
-                                <option value="In Progress">{{ status_label('In Progress') }}</option>
-                                <option value="Under Review">{{ status_label('Under Review') }}</option>
-                                <option value="Completed">{{ status_label('Completed') }}</option>
-                                {% if current_user.role in ['admin', 'CEO', 'Section Head', 'Manager'] %}
-                                <option value="Closed">{{ status_label('Closed') }}</option>
+                                <option value="In Progress" {{ 'selected' if task.display_status == 'In Progress' else '' }}>{{ status_label('In Progress') }}</option>
+                                <option value="Completed" {{ 'selected' if task.display_status == 'Completed' else '' }}>{{ status_label('Completed') }}</option>
+                                {% if current_user.id == task.creator_id or current_user.role in ['admin', 'CEO'] %}
+                                <option value="Canceled" {{ 'selected' if task.display_status == 'Canceled' else '' }}>{{ status_label('Canceled') }}</option>
                                 {% endif %}
                             </select>
                         </div>
-                        
+
                         <div class="mb-3">
-                            <label class="form-label small text-muted">{{ t['description'] }}</label>
-                            <textarea name="content" class="form-control" rows="4" placeholder="{{ t['update_placeholder'] }}" required></textarea>
+                            <label class="form-label small text-muted">{{ t['chat_placeholder'] }}</label>
+                            <textarea name="content" class="form-control" rows="4" placeholder="{{ t['chat_placeholder'] }}"></textarea>
                         </div>
 
                         {% if current_user.role in ['admin', 'CEO', 'Section Head', 'Manager'] %}
@@ -133,22 +142,27 @@
                             </label>
                         </div>
                         {% endif %}
-                        
+
                         <div class="mb-3">
                             <label class="form-label small text-muted"><i class="fas fa-paperclip"></i> {{ t['attachment'] }}</label>
                             <input type="file" name="file" class="form-control form-control-sm">
                         </div>
-                        
+
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary fw-bold btn-lg shadow-sm">
-                                <i class="fas fa-save me-2"></i> {{ t['save_update_btn'] }}
+                                <i class="fas fa-paper-plane me-2"></i> {{ t['send_message'] }}
                             </button>
                         </div>
                     </form>
                 {% endif %}
             </div>
-            
         </div>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var chat = document.getElementById('taskChatThread');
+    if (chat) chat.scrollTop = chat.scrollHeight;
+});
+</script>
 {% endblock %}
