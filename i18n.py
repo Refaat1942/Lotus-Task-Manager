@@ -412,3 +412,7 @@ def t(key):
 def flash_t(key, category='success'):
     from flask import flash
     flash(t(key), category)
+
+
+# Alias for app.py (avoids clashing with task variables named `t`)
+tr = t

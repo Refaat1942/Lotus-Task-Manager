@@ -12,7 +12,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import xlsxwriter
 import pandas as pd
 from sqlalchemy import text
-from i18n import TRANSLATIONS, tr, flash_t
+from i18n import TRANSLATIONS, t as tr, flash_t
 
 APP_VERSION = '2.4.0'
 APP_NAME = 'Lotus Task Manager'
