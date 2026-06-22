@@ -13,7 +13,7 @@ import xlsxwriter
 import pandas as pd
 from sqlalchemy import text
 
-APP_VERSION = '2.2.0'
+APP_VERSION = '2.3.0'
 APP_NAME = 'Lotus Task Manager'
 APP_PORT = 5000
 
@@ -35,7 +35,7 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-AVAILABLE_ROLES = ['CEO', 'Section Head', 'Manager', 'Second line manager', 'Employee', 'admin']
+AVAILABLE_ROLES = sorted(['CEO', 'Section Head', 'Manager', 'Second line manager', 'Employee', 'admin'])
 
 DEFAULT_FEATURE_VISIBILITY = {
     'dashboard': AVAILABLE_ROLES,
@@ -193,7 +193,8 @@ def inject_translations():
             'permissions_desc': 'Choose which roles can see each section for all users.', 'notif_title': 'Notifications', 'notif_empty': 'No new notifications',
             'deadline_passed': 'Deadline Passed', 'deadline_passed_msg': 'Task deadline has passed', 'confirm_datetime': 'OK', 'select_datetime': 'Select date & time',
             'user_updated': 'User updated successfully', 'user_update_error': 'Could not update user (username may already exist)',
-            'overview': 'Overview', 'recent_tasks': 'Recent Tasks', 'view_all': 'View All', 'open': 'Open', 'no_tasks': 'No tasks found'
+            'overview': 'Overview', 'recent_tasks': 'Recent Tasks', 'view_all': 'View All', 'open': 'Open', 'no_tasks': 'No tasks found',
+            'welcome': 'Welcome', 'brand_tagline': 'Smart Task Management'
         }
     else:
         t = {
@@ -209,7 +210,8 @@ def inject_translations():
             'permissions_desc': 'حدد الأدوار التي يمكنها رؤية كل قسم لجميع المستخدمين.', 'notif_title': 'الإشعارات', 'notif_empty': 'لا توجد إشعارات جديدة',
             'deadline_passed': 'انتهى الموعد', 'deadline_passed_msg': 'تجاوزت المهمة الموعد المحدد', 'confirm_datetime': 'موافق', 'select_datetime': 'اختر التاريخ والوقت',
             'user_updated': 'تم تحديث بيانات الموظف بنجاح', 'user_update_error': 'تعذر التحديث (اسم المستخدم قد يكون مستخدماً)',
-            'overview': 'نظرة عامة', 'recent_tasks': 'أحدث المهام', 'view_all': 'عرض الكل', 'open': 'مفتوحة', 'no_tasks': 'لا توجد مهام'
+            'overview': 'نظرة عامة', 'recent_tasks': 'أحدث المهام', 'view_all': 'عرض الكل', 'open': 'مفتوحة', 'no_tasks': 'لا توجد مهام',
+            'welcome': 'مرحباً', 'brand_tagline': 'إدارة مهام ذكية'
         }
     display_name = current_user.full_name if current_user.is_authenticated else ''
     return dict(lang=lang, t=t, user_can_see=user_can_see, display_name=display_name, app_version=APP_VERSION, app_name=APP_NAME)
@@ -420,8 +422,8 @@ def export_excel(type):
 @login_required
 @admin_required
 def manage_departments():
-    departments = Department.query.all()
-    heads = User.query.filter(User.role.in_(['Manager', 'Section Head', 'CEO', 'admin'])).all()
+    departments = Department.query.order_by(Department.name).all()
+    heads = User.query.filter(User.role.in_(['Manager', 'Section Head', 'CEO', 'admin'])).order_by(User.full_name).all()
     return render_template('manage_departments.html', departments=departments, heads=heads)
 
 @app.route('/admin/departments/add', methods=['POST'])
@@ -450,7 +452,7 @@ def delete_department(id):
 @app.route('/admin/users')
 @login_required
 @admin_required
-def manage_users(): return render_template('manage_users.html', users=User.query.all(), departments=Department.query.all(), roles=AVAILABLE_ROLES)
+def manage_users(): return render_template('manage_users.html', users=User.query.order_by(User.full_name).all(), departments=Department.query.order_by(Department.name).all(), roles=AVAILABLE_ROLES)
 
 @app.route('/admin/add_user', methods=['POST'])
 @login_required
@@ -508,7 +510,7 @@ def edit_user(id):
 def manage_hierarchy():
     if request.method == 'POST':
         db.session.add(HierarchyRule(from_role=request.form.get('from_role'), to_role=request.form.get('to_role'), cc_role=request.form.get('cc_role'))); db.session.commit()
-    return render_template('manage_hierarchy.html', rules=HierarchyRule.query.all(), roles=AVAILABLE_ROLES)
+    return render_template('manage_hierarchy.html', rules=HierarchyRule.query.order_by(HierarchyRule.from_role, HierarchyRule.to_role).all(), roles=AVAILABLE_ROLES)
 
 @app.route('/admin/hierarchy/delete/<int:id>')
 @login_required
@@ -605,7 +607,7 @@ def download_template():
     headers = ['full_name', 'username', 'password', 'role', 'department']
     for col_num, header in enumerate(headers): worksheet.write(0, col_num, header)
     worksheet.data_validation(1, 3, 500, 3, {'validate': 'list', 'source': AVAILABLE_ROLES, 'input_title': 'اختر الوظيفة', 'input_message': 'اختر من القائمة', 'error_title': 'خطأ', 'error_message': 'الوظيفة غير معتمدة'})
-    departments = [d.name for d in Department.query.all()]
+    departments = [d.name for d in Department.query.order_by(Department.name).all()]
     if departments: worksheet.data_validation(1, 4, 500, 4, {'validate': 'list', 'source': departments, 'input_title': 'اختر القسم', 'input_message': 'اختر القسم الخاص بالموظف', 'error_title': 'خطأ', 'error_message': 'القسم غير مسجل في النظام'})
     workbook.close(); output.seek(0)
     response = make_response(output.read())
@@ -671,7 +673,7 @@ def create_task():
         except: pass
         flash('تم إرسال المهمة بنجاح!', 'success')
         return redirect(url_for('tasks'))
-    return render_template('create_task.html', users=User.query.filter_by(is_active=True).all())
+    return render_template('create_task.html', users=User.query.filter_by(is_active=True).order_by(User.full_name).all())
 
 @app.route('/tasks/<int:id>', methods=['GET', 'POST'])
 @login_required

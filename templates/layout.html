@@ -15,13 +15,18 @@
     <style>
         :root {
             --ltm-white: #ffffff;
-            --ltm-bg: #f4f9ff;
-            --ltm-blue: #1565c0;
-            --ltm-blue-dark: #0d47a1;
-            --ltm-blue-light: #e3f2fd;
-            --ltm-green: #2e7d32;
-            --ltm-green-bright: #43a047;
-            --ltm-green-light: #e8f5e9;
+            --ltm-bg: #f8fafc;
+            --ltm-blue: #2563eb;
+            --ltm-blue-dark: #1d4ed8;
+            --ltm-blue-light: #eff6ff;
+            --ltm-green: #059669;
+            --ltm-green-bright: #10b981;
+            --ltm-green-light: #ecfdf5;
+            --ltm-sidebar: #ffffff;
+            --ltm-sidebar-text: #475569;
+            --ltm-sidebar-muted: #94a3b8;
+            --ltm-border: #e2e8f0;
+            --ltm-topbar-h: 64px;
         }
         html, body { height: 100%; margin: 0; }
         body {
@@ -29,12 +34,12 @@
             background-color: var(--ltm-bg);
             overflow: hidden;
             text-align: {{ 'right' if lang == 'ar' else 'left' }};
-            color: #1a237e;
+            color: #1e293b;
         }
         .sidebar {
             height: 100vh;
-            background: linear-gradient(180deg, var(--ltm-blue-dark) 0%, var(--ltm-blue) 100%);
-            color: #fff;
+            background: var(--ltm-sidebar);
+            color: var(--ltm-sidebar-text);
             width: 260px;
             position: fixed;
             top: 0;
@@ -42,7 +47,8 @@
             overflow-x: hidden;
             z-index: 1000;
             -webkit-overflow-scrolling: touch;
-            box-shadow: 2px 0 12px rgba(13, 71, 161, 0.15);
+            border-inline-end: 1px solid var(--ltm-border);
+            box-shadow: 0 0 24px rgba(15, 23, 42, 0.04);
         }
         html[dir="rtl"] .sidebar { right: 0; }
         html[dir="ltr"] .sidebar { left: 0; }
@@ -52,38 +58,127 @@
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
             background: var(--ltm-bg);
+            display: flex;
+            flex-direction: column;
         }
         html[dir="rtl"] .main-content { margin-right: 260px; }
         html[dir="ltr"] .main-content { margin-left: 260px; }
         .sidebar-brand {
-            background: rgba(255,255,255,0.08);
-            border-bottom: 3px solid var(--ltm-green-bright);
+            padding: 1.25rem 1rem 1rem;
+            text-align: center;
+            border-bottom: 1px solid var(--ltm-border);
+            background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
         }
-        .sidebar-brand .role-badge { color: #a5d6a7; font-weight: 600; }
+        .sidebar-logo {
+            width: 72px;
+            height: auto;
+            object-fit: contain;
+            margin-bottom: 0.5rem;
+        }
+        .sidebar-brand .brand-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #0f172a;
+            line-height: 1.3;
+            margin-bottom: 0.15rem;
+        }
+        .sidebar-brand .brand-tagline {
+            font-size: 0.68rem;
+            color: var(--ltm-green);
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+        .sidebar-brand .brand-version {
+            font-size: 0.62rem;
+            color: var(--ltm-sidebar-muted);
+            margin-top: 0.35rem;
+        }
+        .sidebar-section {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--ltm-sidebar-muted);
+            padding: 1rem 1.25rem 0.35rem;
+        }
         .sidebar a {
-            color: #e3f2fd;
+            color: var(--ltm-sidebar-text);
             text-decoration: none;
-            display: block;
-            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            padding: 0.7rem 1.25rem;
             transition: 0.2s;
-            border-bottom: 1px solid rgba(255,255,255,0.06);
+            font-size: 0.92rem;
+            font-weight: 500;
+            border-radius: 0;
         }
         html[dir="rtl"] .sidebar a:hover,
-        html[dir="rtl"] .sidebar a.active { border-right: 4px solid var(--ltm-green-bright); border-left: none; }
-        html[dir="ltr"] .sidebar a:hover,
-        html[dir="ltr"] .sidebar a.active { border-left: 4px solid var(--ltm-green-bright); border-right: none; }
-        .sidebar a:hover, .sidebar a.active {
-            background: rgba(255,255,255,0.12);
-            color: #fff;
+        html[dir="rtl"] .sidebar a.active {
+            background: var(--ltm-green-light);
+            color: var(--ltm-green);
+            border-right: 3px solid var(--ltm-green);
+            border-left: none;
         }
-        .sidebar .text-danger { color: #ffcdd2 !important; }
-        .sidebar .text-danger:hover { color: #fff !important; background: rgba(198, 40, 40, 0.35); }
+        html[dir="ltr"] .sidebar a:hover,
+        html[dir="ltr"] .sidebar a.active {
+            background: var(--ltm-green-light);
+            color: var(--ltm-green);
+            border-left: 3px solid var(--ltm-green);
+            border-right: none;
+        }
+        .sidebar a i { width: 1.35rem; opacity: 0.85; }
+        .sidebar .sidebar-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--ltm-border);
+            padding-top: 0.5rem;
+            padding-bottom: 1rem;
+        }
+        .sidebar .text-danger { color: #dc2626 !important; }
+        .sidebar .text-danger:hover {
+            color: #dc2626 !important;
+            background: #fef2f2 !important;
+            border-color: #dc2626 !important;
+        }
+        .app-topbar {
+            min-height: var(--ltm-topbar-h);
+            background: var(--ltm-white);
+            border-bottom: 1px solid var(--ltm-border);
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        }
+        .topbar-user {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-inline-start: auto;
+        }
+        .topbar-user-name {
+            font-weight: 700;
+            color: #0f172a;
+            font-size: 0.95rem;
+        }
+        .topbar-user-role {
+            background: var(--ltm-blue-light);
+            color: var(--ltm-blue-dark);
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 0.25rem 0.65rem;
+            border-radius: 999px;
+            border: 1px solid #bfdbfe;
+        }
         .scroll-panel { max-height: calc(100vh - 220px); overflow-y: auto; overflow-x: auto; }
         .modal-dialog-scrollable .modal-content { max-height: calc(100vh - 2rem); }
         .modal-dialog-scrollable .modal-body { overflow-y: auto; max-height: calc(100vh - 12rem); }
         .card-scroll { max-height: 60vh; overflow-y: auto; }
         .dropdown-menu-scroll { max-height: min(420px, 65vh); overflow-y: auto; }
-        .card { background: var(--ltm-white); border: 1px solid var(--ltm-blue-light); }
+        .card { background: var(--ltm-white); border: 1px solid var(--ltm-border); box-shadow: 0 1px 3px rgba(15,23,42,0.04); }
         .card-header.bg-primary, .modal-header.bg-primary, .ltm-header-blue {
             background: linear-gradient(135deg, var(--ltm-blue) 0%, var(--ltm-blue-dark) 100%) !important;
             color: #fff !important;
@@ -132,25 +227,27 @@
         }
         .form-control:focus, .form-select:focus {
             border-color: var(--ltm-green-bright);
-            box-shadow: 0 0 0 0.2rem rgba(67, 160, 71, 0.25);
+            box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.2);
         }
         .table thead.bg-light { background: var(--ltm-blue-light) !important; color: var(--ltm-blue-dark); }
-        .alert-success { background: var(--ltm-green-light); color: var(--ltm-green); border-color: #a5d6a7; }
+        .alert-success { background: var(--ltm-green-light); color: var(--ltm-green); border-color: #a7f3d0; }
         @media (max-width: 768px) {
-            .sidebar { transform: translateX({{ '100%' if lang=='ar' else '-100%' }}); }
+            .sidebar { transform: translateX({{ '100%' if lang=='ar' else '-100%' }}); transition: transform 0.25s ease; }
             .sidebar.active { transform: translateX(0); }
             .main-content { margin: 0 !important; }
             .scroll-panel { max-height: calc(100vh - 180px); }
+            .topbar-user-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         }
     </style>
 </head>
 <body>
     {% if current_user.is_authenticated %}
-    <div class="sidebar" id="sidebar">
-        <div class="p-3 text-center sidebar-brand">
-            <h4 class="mb-0 fw-bold">{{ t['system_title'] }}</h4>
-            <small class="role-badge">{{ current_user.role }}</small>
-            <small class="d-block mt-1" style="font-size:0.65rem; opacity:0.75;">v{{ app_version }}</small>
+    <div class="sidebar d-flex flex-column" id="sidebar">
+        <div class="sidebar-brand">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Lotus" class="sidebar-logo" onerror="this.style.display='none'">
+            <div class="brand-title">{{ t['system_title'] }}</div>
+            <div class="brand-tagline">{{ t['brand_tagline'] }}</div>
+            <div class="brand-version">v{{ app_version }}</div>
         </div>
         
         {% if user_can_see('dashboard') %}
@@ -164,12 +261,12 @@
         {% endif %}
         
         {% if user_can_see('reports') %}
-        <div class="text-uppercase small text-muted px-3 mt-3 mb-1">Reports & Tools</div>
+        <div class="sidebar-section">Reports & Tools</div>
         <a href="/reports"><i class="fas fa-chart-line fa-fw mx-2"></i> {{ t['reports'] }}</a>
         {% endif %}
 
         {% if current_user.role in ['admin', 'CEO'] %}
-        <div class="text-uppercase small text-muted px-3 mt-3 mb-1">Admin Tools</div>
+        <div class="sidebar-section">Admin Tools</div>
         {% if user_can_see('users_manage') %}
         <a href="/admin/users"><i class="fas fa-users-cog fa-fw mx-2"></i> {{ t['users_manage'] }}</a>
         {% endif %}
@@ -182,7 +279,7 @@
         <a href="/admin/permissions"><i class="fas fa-eye fa-fw mx-2"></i> {{ t['permissions_manage'] }}</a>
         {% endif %}
         
-        <div class="mt-4 border-top pt-2">
+        <div class="sidebar-footer mt-auto">
             <a href="#" data-bs-toggle="modal" data-bs-target="#changeMyPassModal">
                 <i class="fas fa-key fa-fw mx-2"></i> {{ t['change_password'] }}
             </a>
@@ -195,19 +292,22 @@
     {% endif %}
 
     <div class="main-content">
-        <nav class="navbar navbar-light bg-white shadow-sm d-md-none mb-4 p-2">
-            <button class="btn btn-outline-secondary" onclick="document.getElementById('sidebar').classList.toggle('active')"><i class="fas fa-bars"></i></button>
-        </nav>
-        
-        <div class="container-fluid p-4">
-            {% if current_user.is_authenticated %}
-            <div class="d-flex justify-content-end align-items-center border-bottom pb-3 mb-4">
+        {% if current_user.is_authenticated %}
+        <header class="app-topbar">
+            <button class="btn btn-outline-secondary d-md-none" type="button" onclick="document.getElementById('sidebar').classList.toggle('active')">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="topbar-user">
+                <div class="text-end">
+                    <div class="topbar-user-name">{{ display_name }}</div>
+                </div>
+                <span class="topbar-user-role">{{ current_user.role }}</span>
                 <div class="dropdown">
-                    <a href="#" class="text-dark position-relative fs-4 text-decoration-none" id="bellIcon" data-bs-toggle="dropdown" aria-expanded="false" title="{{ t['notif_title'] }}">
+                    <a href="#" class="text-dark position-relative fs-5 text-decoration-none" id="bellIcon" data-bs-toggle="dropdown" aria-expanded="false" title="{{ t['notif_title'] }}">
                         <i class="fas fa-bell"></i>
                         <span id="notifBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger shadow" style="font-size: 0.65rem; display: none;">0</span>
                     </a>
-                    <ul class="dropdown-menu dropdown-menu-scroll shadow-lg border-0 p-0" style="width: 340px;">
+                    <ul class="dropdown-menu dropdown-menu-scroll shadow-lg border-0 p-0 {{ 'dropdown-menu-start' if lang == 'ar' else 'dropdown-menu-end' }}" style="width: 340px;">
                         <li class="bg-light p-3 border-bottom text-center text-primary fw-bold">
                             <i class="fas fa-bell me-2"></i> {{ t['notif_title'] }}
                         </li>
@@ -217,8 +317,14 @@
                     </ul>
                 </div>
             </div>
-            {% endif %}
-
+        </header>
+        {% else %}
+        <nav class="navbar navbar-light bg-white shadow-sm d-md-none mb-4 p-2">
+            <button class="btn btn-outline-secondary" onclick="document.getElementById('sidebar').classList.toggle('active')"><i class="fas fa-bars"></i></button>
+        </nav>
+        {% endif %}
+        
+        <div class="container-fluid p-4 flex-grow-1">
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}

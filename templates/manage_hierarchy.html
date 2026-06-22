@@ -37,7 +37,7 @@
                 <thead class="bg-light">
                     <tr>
                         <th>{{ t['sender'] }}</th>
-                        <th><i class="fas fa-arrow-left"></i></th>
+                        <th><i class="fas fa-arrow-{{ 'left' if lang == 'ar' else 'right' }}"></i></th>
                         <th>{{ t['receiver'] }}</th>
                         <th>{{ t['appears_to'] }}</th>
                         <th>{{ t['delete'] }}</th>
@@ -47,7 +47,7 @@
                     {% for rule in rules %}
                     <tr>
                         <td class="fw-bold text-primary">{{ rule.from_role }}</td>
-                        <td><i class="fas fa-arrow-left text-muted"></i></td>
+                        <td><i class="fas fa-arrow-{{ 'left' if lang == 'ar' else 'right' }} text-muted"></i></td>
                         <td class="fw-bold">{{ rule.to_role }}</td>
                         <td><span class="badge bg-info text-dark">{{ rule.cc_role if rule.cc_role else '--' }}</span></td>
                         <td>
