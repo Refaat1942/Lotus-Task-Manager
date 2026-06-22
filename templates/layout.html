@@ -31,11 +31,15 @@
         }
         @keyframes ltm-logo-float {
             0%, 100% { transform: translateY(0) scale(1); }
-            50% { transform: translateY(-6px) scale(1.04); }
+            50% { transform: translateY(-8px) scale(1.05); }
         }
         @keyframes ltm-logo-glow {
-            0%, 100% { filter: drop-shadow(0 6px 18px rgba(5, 150, 105, 0.22)); }
-            50% { filter: drop-shadow(0 10px 28px rgba(37, 99, 235, 0.32)); }
+            0%, 100% { filter: drop-shadow(0 8px 22px rgba(5, 150, 105, 0.26)); }
+            50% { filter: drop-shadow(0 14px 32px rgba(37, 99, 235, 0.36)); }
+        }
+        @keyframes ltm-logo-breathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.07); }
         }
         .ltm-logo-wrap {
             display: inline-flex;
@@ -51,12 +55,13 @@
             animation-play-state: paused;
             transform: scale(1.08);
         }
-        /* Sidebar: glow only — no vertical float (prevents overlap with menu) */
+        /* Sidebar: breathe + glow (no vertical shift — avoids menu overlap) */
         .sidebar .ltm-logo-animated {
-            animation: ltm-logo-glow 4s ease-in-out infinite;
+            animation: ltm-logo-breathe 3.4s ease-in-out infinite, ltm-logo-glow 4.2s ease-in-out infinite;
         }
         .sidebar .ltm-logo-wrap:hover .ltm-logo-animated {
-            transform: scale(1.04);
+            animation-play-state: paused;
+            transform: scale(1.1);
         }
         html, body { height: 100%; margin: 0; }
         body {
@@ -99,12 +104,12 @@
             background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 55%, #eff6ff 100%);
         }
         .sidebar .ltm-logo-wrap {
-            margin-bottom: 0.35rem;
-            max-height: 82px;
-            overflow: hidden;
+            margin-bottom: 0.5rem;
+            max-height: 102px;
+            overflow: visible;
         }
         .sidebar-logo {
-            max-height: 76px;
+            max-height: 96px;
             width: auto;
             max-width: 100%;
             height: auto;
