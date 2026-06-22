@@ -13,16 +13,27 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <style>
+        :root {
+            --ltm-white: #ffffff;
+            --ltm-bg: #f4f9ff;
+            --ltm-blue: #1565c0;
+            --ltm-blue-dark: #0d47a1;
+            --ltm-blue-light: #e3f2fd;
+            --ltm-green: #2e7d32;
+            --ltm-green-bright: #43a047;
+            --ltm-green-light: #e8f5e9;
+        }
         html, body { height: 100%; margin: 0; }
         body {
             font-family: {{ t['font'] | default("'Cairo', sans-serif") }};
-            background-color: #f4f6f9;
+            background-color: var(--ltm-bg);
             overflow: hidden;
             text-align: {{ 'right' if lang == 'ar' else 'left' }};
+            color: #1a237e;
         }
         .sidebar {
             height: 100vh;
-            background: #2c3e50;
+            background: linear-gradient(180deg, var(--ltm-blue-dark) 0%, var(--ltm-blue) 100%);
             color: #fff;
             width: 260px;
             position: fixed;
@@ -31,6 +42,7 @@
             overflow-x: hidden;
             z-index: 1000;
             -webkit-overflow-scrolling: touch;
+            box-shadow: 2px 0 12px rgba(13, 71, 161, 0.15);
         }
         html[dir="rtl"] .sidebar { right: 0; }
         html[dir="ltr"] .sidebar { left: 0; }
@@ -39,23 +51,91 @@
             overflow-y: auto;
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
+            background: var(--ltm-bg);
         }
         html[dir="rtl"] .main-content { margin-right: 260px; }
         html[dir="ltr"] .main-content { margin-left: 260px; }
+        .sidebar-brand {
+            background: rgba(255,255,255,0.08);
+            border-bottom: 3px solid var(--ltm-green-bright);
+        }
+        .sidebar-brand .role-badge { color: #a5d6a7; font-weight: 600; }
         .sidebar a {
-            color: #cfd8dc;
+            color: #e3f2fd;
             text-decoration: none;
             display: block;
             padding: 12px 20px;
             transition: 0.2s;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
         }
-        .sidebar a:hover, .sidebar a.active { background: #34495e; color: #fff; border-left: 4px solid #3498db; }
+        html[dir="rtl"] .sidebar a:hover,
+        html[dir="rtl"] .sidebar a.active { border-right: 4px solid var(--ltm-green-bright); border-left: none; }
+        html[dir="ltr"] .sidebar a:hover,
+        html[dir="ltr"] .sidebar a.active { border-left: 4px solid var(--ltm-green-bright); border-right: none; }
+        .sidebar a:hover, .sidebar a.active {
+            background: rgba(255,255,255,0.12);
+            color: #fff;
+        }
+        .sidebar .text-danger { color: #ffcdd2 !important; }
+        .sidebar .text-danger:hover { color: #fff !important; background: rgba(198, 40, 40, 0.35); }
         .scroll-panel { max-height: calc(100vh - 220px); overflow-y: auto; overflow-x: auto; }
         .modal-dialog-scrollable .modal-content { max-height: calc(100vh - 2rem); }
         .modal-dialog-scrollable .modal-body { overflow-y: auto; max-height: calc(100vh - 12rem); }
         .card-scroll { max-height: 60vh; overflow-y: auto; }
         .dropdown-menu-scroll { max-height: min(420px, 65vh); overflow-y: auto; }
+        .card { background: var(--ltm-white); border: 1px solid var(--ltm-blue-light); }
+        .card-header.bg-primary, .modal-header.bg-primary, .ltm-header-blue {
+            background: linear-gradient(135deg, var(--ltm-blue) 0%, var(--ltm-blue-dark) 100%) !important;
+            color: #fff !important;
+            border: none;
+        }
+        .ltm-header-green, .card-header.ltm-header-green {
+            background: linear-gradient(135deg, var(--ltm-green) 0%, var(--ltm-green-bright) 100%) !important;
+            color: #fff !important;
+            border: none;
+        }
+        .btn-primary {
+            background-color: var(--ltm-blue);
+            border-color: var(--ltm-blue-dark);
+        }
+        .btn-primary:hover, .btn-primary:focus {
+            background-color: var(--ltm-blue-dark);
+            border-color: var(--ltm-blue-dark);
+        }
+        .btn-success {
+            background-color: var(--ltm-green);
+            border-color: var(--ltm-green);
+        }
+        .btn-success:hover, .btn-success:focus {
+            background-color: var(--ltm-green-bright);
+            border-color: var(--ltm-green-bright);
+        }
+        .btn-outline-primary {
+            color: var(--ltm-blue);
+            border-color: var(--ltm-blue);
+        }
+        .btn-outline-primary:hover {
+            background-color: var(--ltm-blue);
+            border-color: var(--ltm-blue);
+        }
+        .text-primary { color: var(--ltm-blue) !important; }
+        .text-success { color: var(--ltm-green) !important; }
+        .bg-primary { background-color: var(--ltm-blue) !important; }
+        .bg-success { background-color: var(--ltm-green) !important; }
+        .border-primary { border-color: var(--ltm-blue) !important; }
+        .border-success { border-color: var(--ltm-green) !important; }
+        #bellIcon { color: var(--ltm-blue) !important; }
+        #notifBadge { background-color: var(--ltm-green) !important; }
+        .dropdown-menu .bg-light {
+            background: var(--ltm-blue-light) !important;
+            color: var(--ltm-blue-dark);
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--ltm-green-bright);
+            box-shadow: 0 0 0 0.2rem rgba(67, 160, 71, 0.25);
+        }
+        .table thead.bg-light { background: var(--ltm-blue-light) !important; color: var(--ltm-blue-dark); }
+        .alert-success { background: var(--ltm-green-light); color: var(--ltm-green); border-color: #a5d6a7; }
         @media (max-width: 768px) {
             .sidebar { transform: translateX({{ '100%' if lang=='ar' else '-100%' }}); }
             .sidebar.active { transform: translateX(0); }
@@ -67,9 +147,10 @@
 <body>
     {% if current_user.is_authenticated %}
     <div class="sidebar" id="sidebar">
-        <div class="p-3 text-center bg-dark">
+        <div class="p-3 text-center sidebar-brand">
             <h4 class="mb-0 fw-bold">{{ t['system_title'] }}</h4>
-            <small class="text-info">{{ current_user.role }}</small>
+            <small class="role-badge">{{ current_user.role }}</small>
+            <small class="d-block mt-1" style="font-size:0.65rem; opacity:0.75;">v{{ app_version }}</small>
         </div>
         
         {% if user_can_see('dashboard') %}
@@ -156,7 +237,7 @@
     <div class="modal fade" id="changeMyPassModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header bg-dark text-white">
+                <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">{{ t['change_password'] }}</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
@@ -186,7 +267,7 @@
         const notifIcons = {
             new_task: 'fas fa-thumbtack text-primary',
             task_update: 'fas fa-pencil-alt text-success',
-            deadline_passed: 'fas fa-clock text-danger',
+            deadline_passed: 'fas fa-clock text-primary',
             default: 'fas fa-bell text-info'
         };
 
