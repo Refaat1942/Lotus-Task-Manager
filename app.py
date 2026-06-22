@@ -12,8 +12,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import xlsxwriter
 import pandas as pd
 from sqlalchemy import text
+from i18n import TRANSLATIONS, tr, flash_t
 
-APP_VERSION = '2.3.1'
+APP_VERSION = '2.4.0'
 APP_NAME = 'Lotus Task Manager'
 APP_PORT = 5000
 
@@ -49,13 +50,13 @@ DEFAULT_FEATURE_VISIBILITY = {
 }
 
 FEATURE_LABELS = {
-    'dashboard': {'ar': 'لوحة المراقبة', 'en': 'Dashboard'},
-    'create_task': {'ar': 'إسناد مهمة', 'en': 'Assign Task'},
-    'tasks_list': {'ar': 'قائمة المهام', 'en': 'Tasks List'},
-    'reports': {'ar': 'التقارير', 'en': 'Reports'},
+    'dashboard': {'ar': 'لوحة التحكم', 'en': 'Dashboard'},
+    'create_task': {'ar': 'إنشاء مهمة', 'en': 'Create Task'},
+    'tasks_list': {'ar': 'قائمة المهام', 'en': 'Task List'},
+    'reports': {'ar': 'التقارير والتصدير', 'en': 'Reports & Export'},
     'users_manage': {'ar': 'إدارة الموظفين', 'en': 'Manage Users'},
     'departments_manage': {'ar': 'إدارة الأقسام', 'en': 'Manage Departments'},
-    'hierarchy_manage': {'ar': 'شجرة الصلاحيات', 'en': 'Hierarchy Rules'},
+    'hierarchy_manage': {'ar': 'قواعد التسلسل الهرمي', 'en': 'Hierarchy Rules'},
     'import_users': {'ar': 'استيراد الموظفين', 'en': 'Import Users'},
 }
 
@@ -146,7 +147,7 @@ def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if not current_user.is_authenticated or current_user.role not in ['admin', 'CEO']:
-            flash('غير مصرح لك بدخول هذه الصفحة' if session.get('lang', 'ar') == 'ar' else 'Access denied', 'danger')
+            flash(tr('access_denied'), 'danger')
             return redirect(url_for('dashboard'))
         return f(*args, **kwargs)
     return decorated
@@ -175,46 +176,13 @@ def seed_feature_visibility():
             db.session.add(FeatureVisibility(feature_key=key, allowed_roles=','.join(roles)))
     db.session.commit()
 
-# --- الترجمة ---
+# --- Translations ---
 @app.context_processor
 def inject_translations():
     lang = session.get('lang', 'ar')
-    if lang == 'en':
-        t = {
-            'dir': 'ltr', 'font': "'Arial', sans-serif", 'system_title': 'Lotus Task Manager', 'dashboard': 'Dashboard', 'new_task': 'Assign Task', 'tasks_list': 'Tasks List', 'users_manage': 'Manage Users', 'import_users': 'Import Users', 'hierarchy_manage': 'Hierarchy Rules', 'departments_manage': 'Manage Departments', 'department': 'Department', 'no_dept': '-- No Department --', 'alert_settings': 'Alert Settings', 'lang_name': 'عربي', 'logout': 'Logout', 'login_title': 'Lotus Task Manager', 'login_subtitle': 'Login to continue', 'username': 'Username', 'password': 'Password', 'login_btn': 'Login', 'copyright': '© 2026 Lotus Task Manager.', 'full_name': 'Full Name', 'email': 'Email', 'role': 'Role', 'actions': 'Actions', 'add_user': 'Add User', 'save': 'Save', 'cancel': 'Cancel', 'view': 'View', 'total_tasks': 'Total Tasks', 'in_progress': 'In Progress', 'overdue': 'Overdue', 'completed': 'Completed', 'task_title': 'Task Title', 'creator': 'Created By', 'assignee': 'Assignee', 'head_cc': 'Monitored By (CC)', 'deadline': 'Deadline', 'status': 'Status', 'priority': 'Priority', 'action': 'Action', 'description': 'Description', 'create_btn': 'Send Task', 'attachment': 'Attachment', 'status_New': 'New', 'status_In Progress': 'In Progress', 'status_Completed': 'Completed', 'status_Under Review': 'Under Review', 'status_Closed': 'Closed', 'status_Overdue_Closed': 'Closed (Overdue)', 'status_Closed_by_System': 'Closed (Ignored >10m)', 'select_emp': '-- Select Employee --', 'select_head': '-- Select CC / Head --', 'no_deadline': 'No Deadline', 'recurrence': 'Recurrence', 'rec_none': 'Once', 'rec_daily': 'Daily', 'rec_weekly': 'Weekly', 'rec_monthly': 'Monthly', 'priority_low': 'Low', 'priority_medium': 'Medium', 'priority_high': 'High', 'priority_urgent': 'Urgent', 'task_details_title': 'Task Details', 'history_updates': 'History & Updates', 'add_update': 'Add Update', 'admin_note': 'Head Note', 'active': 'Active', 'suspended': 'Suspended', 'status_col': 'Status', 'edit': 'Edit', 'block_unblock': 'Block/Unblock', 'reset_pass': 'Reset Password', 'import_excel': 'Import Excel', 'import_excel_title': 'Import from Excel', 'import_instructions': 'Instructions:', 'download_template': 'Download Template', 'import_desc': 'Ensure Excel format (.xlsx):', 'import_name_desc': 'Full Name', 'import_username_desc': 'Username', 'import_pass_desc': 'Password', 'import_role_desc': 'Role', 'import_dept_desc': 'Department', 'import_choose_file': 'Choose Excel file', 'start_import': 'Start Import', 'back_to_users': 'Back to Users', 'hierarchy_title': 'Hierarchy Matrix', 'add_rule': 'Add Rule', 'from_role': 'From Role', 'to_role': 'To Role', 'cc_role': 'CC Role', 'save_rule': 'Save', 'sender': 'Sender', 'receiver': 'Receiver', 'appears_to': 'Appears to', 'delete': 'Delete', 'confirm_delete': 'Are you sure?', 'no_cc': '-- No CC --', 'reports': 'Reports & Exports', 'add_dept': 'Add Department', 'dept_name': 'Department Name', 'dept_head': 'Department Head', 'emp_count': 'Employees Count', 'no_depts': 'No departments found',
-            'knowledge_title': 'Company Library & Regulations', 'add_article': 'Add Regulation/Article', 'search_placeholder': 'Search regulations, policies, manuals...', 'search_btn': 'Search', 'read_details': 'Read Details', 'added_by': 'Added by:', 'no_documents': 'No documents found', 'add_new_doc': 'Add New Document', 'doc_title': 'Document Title', 'category': 'Category', 'cat_hr': 'HR Regulations', 'cat_it': 'IT Manuals', 'cat_general': 'General Policies', 'cat_forms': 'Business Forms', 'content': 'Content', 'save_publish': 'Save & Publish',
-            'reports_title': 'Reports & Data Export', 'emp_report': 'Employees Report', 'emp_report_desc': 'Download all employees data, roles, and status.', 'download_excel': 'Download Excel', 'tasks_report': 'Comprehensive Tasks Report', 'tasks_report_desc': 'Download full task history (Completed, In-progress).', 'overdue_report': 'Overdue Tasks Report', 'overdue_report_desc': 'Report for tasks exceeding the deadline.', 'back_dashboard': 'Back to Dashboard',
-            'admin_panel_title': 'Admin Dashboard', 'add_new_user': 'Add New User', 'can_reports': 'Reports Access', 'can_excel': 'Excel Access', 'add_btn': 'Add', 'current_users': 'Current Users',
-            'add_new_cat': 'Add New Category', 'cat_name_placeholder': 'Category Name (e.g. Warehouse)', 'current_cats': 'Current Categories',
-            'branch_stats_title': 'Complaints by Branch', 'complaints_count': 'Complaints Count', 'back_home': 'Back to Home',
-            'current_status': '(Current)', 'attachment_label': 'Attachment:',
-            'change_password': 'Change Password', 'current_password': 'Current Password', 'new_password': 'New Password',
-            'assign_to': 'Assign To', 'permissions_manage': 'Visibility Settings', 'permissions_title': 'Feature Visibility Control',
-            'permissions_desc': 'Choose which roles can see each section for all users.', 'notif_title': 'Notifications', 'notif_empty': 'No new notifications',
-            'deadline_passed': 'Deadline Passed', 'deadline_passed_msg': 'Task deadline has passed', 'confirm_datetime': 'Pick date & time, then press OK to confirm', 'select_datetime': 'Select date & time',
-            'user_updated': 'User updated successfully', 'user_update_error': 'Could not update user (username may already exist)',
-            'overview': 'Overview', 'recent_tasks': 'Recent Tasks', 'view_all': 'View All', 'open': 'Open', 'no_tasks': 'No tasks found',
-            'welcome': 'Welcome', 'brand_tagline': 'Smart Task Management'
-        }
-    else:
-        t = {
-            'dir': 'rtl', 'font': "'Cairo', sans-serif", 'system_title': 'Lotus Task Manager', 'dashboard': 'لوحة المراقبة', 'new_task': 'إسناد مهمة', 'tasks_list': 'قائمة المهام', 'users_manage': 'إدارة الموظفين', 'import_users': 'استيراد الموظفين', 'hierarchy_manage': 'شجرة الصلاحيات', 'departments_manage': 'إدارة الأقسام', 'department': 'القسم', 'no_dept': '-- بدون قسم --', 'alert_settings': 'إعدادات التنبيهات', 'lang_name': 'English', 'logout': 'تسجيل الخروج', 'login_title': 'Lotus Task Manager', 'login_subtitle': 'قم بتسجيل الدخول للمتابعة', 'username': 'اسم المستخدم', 'password': 'كلمة المرور', 'login_btn': 'دخول', 'copyright': '© 2026 Lotus Task Manager.', 'full_name': 'الاسم بالكامل', 'email': 'البريد الإلكتروني', 'role': 'الوظيفة', 'actions': 'الإجراءات', 'add_user': 'إضافة موظف', 'save': 'حفظ', 'cancel': 'إلغاء', 'view': 'عرض', 'total_tasks': 'إجمالي المهام', 'in_progress': 'قيد التنفيذ', 'overdue': 'متأخرة', 'completed': 'مكتملة', 'task_title': 'المهمة', 'creator': 'المرسل', 'assignee': 'المسؤول', 'head_cc': 'متابعة بواسطة (CC)', 'deadline': 'موعد التسليم', 'status': 'الحالة', 'priority': 'الأولوية', 'action': 'الإجراء', 'description': 'الوصف', 'create_btn': 'إرسال المهمة', 'attachment': 'مرفقات', 'status_New': 'جديدة (لم تفتح)', 'status_In Progress': 'جاري العمل', 'status_Completed': 'مكتملة', 'status_Under Review': 'قيد المراجعة', 'status_Closed': 'مغلقة', 'status_Overdue_Closed': 'إغلاق تلقائي', 'status_Closed_by_System': 'مغلقة بواسطة النظام', 'select_emp': '-- اختر الموظف --', 'select_head': '-- اختر المتابع --', 'no_deadline': 'بدون موعد', 'recurrence': 'تكرار المهمة', 'rec_none': 'مرة واحدة', 'rec_daily': 'يومياً', 'rec_weekly': 'أسبوعياً', 'rec_monthly': 'شهرياً', 'priority_low': 'منخفضة', 'priority_medium': 'متوسطة', 'priority_high': 'عالية', 'priority_urgent': 'عاجلة جداً', 'task_details_title': 'تفاصيل المهمة', 'history_updates': 'سجل المتابعة', 'add_update': 'إضافة تحديث', 'admin_note': 'ملحوظة إدارية', 'active': 'نشط', 'suspended': 'موقوف', 'status_col': 'الحالة', 'edit': 'تعديل', 'block_unblock': 'إيقاف/تفعيل', 'reset_pass': 'إعادة تعيين المرور', 'import_excel': 'استيراد شيت', 'import_excel_title': 'استيراد الموظفين', 'import_instructions': 'تعليمات التجهيز:', 'download_template': 'تحميل النموذج', 'import_desc': 'يجب أن يكون الملف Excel (.xlsx):', 'import_name_desc': 'الاسم بالكامل', 'import_username_desc': 'اسم المستخدم', 'import_pass_desc': 'كلمة المرور', 'import_role_desc': 'الوظيفة', 'import_dept_desc': 'القسم', 'import_choose_file': 'اختر ملف إكسيل', 'start_import': 'بدء الاستيراد', 'back_to_users': 'عودة', 'hierarchy_title': 'شجرة مسارات الصلاحيات', 'add_rule': 'إضافة قاعدة', 'from_role': 'المرسل', 'to_role': 'المستلم', 'cc_role': 'نسخة CC', 'save_rule': 'حفظ', 'sender': 'المرسل', 'receiver': 'المستلم', 'appears_to': 'يظهر لـ (CC)', 'delete': 'حذف', 'confirm_delete': 'تأكيد الحذف؟', 'no_cc': '-- بدون CC --', 'reports': 'التقارير الشاملة', 'add_dept': 'إضافة قسم', 'dept_name': 'اسم القسم', 'dept_head': 'رئيس القسم', 'emp_count': 'عدد الموظفين', 'no_depts': 'لا توجد أقسام مسجلة',
-            'knowledge_title': 'مكتبة الشركة واللوائح الداخلية', 'add_article': 'إضافة لائحة/مقال', 'search_placeholder': 'ابحث في اللوائح، سياسات الإجازات، أدلة التشغيل...', 'search_btn': 'بحث', 'read_details': 'قراءة التفاصيل', 'added_by': 'أُضيف بواسطة:', 'no_documents': 'لا توجد مستندات', 'add_new_doc': 'إضافة مستند جديد', 'doc_title': 'عنوان المستند', 'category': 'التصنيف', 'cat_hr': 'لوائح HR', 'cat_it': 'أدلة تقنية (IT)', 'cat_general': 'سياسات عامة', 'cat_forms': 'نماذج عمل', 'content': 'المحتوى', 'save_publish': 'حفظ ونشر',
-            'reports_title': 'التقارير وتصدير البيانات', 'emp_report': 'تقرير الموظفين', 'emp_report_desc': 'تحميل بيانات جميع الموظفين وحالة حساباتهم والأدوار الوظيفية.', 'download_excel': 'تحميل Excel', 'tasks_report': 'التقرير الشامل للمهام', 'tasks_report_desc': 'تحميل سجل المهام بالكامل (المكتملة، قيد التنفيذ، والملغاة).', 'overdue_report': 'المهام المتأخرة (Overdue)', 'overdue_report_desc': 'تقرير خاص بالمهام التي تخطت وقت التسليم المحدد (Deadline).', 'back_dashboard': 'العودة للوحة المراقبة',
-            'admin_panel_title': 'لوحة تحكم المشرف', 'add_new_user': 'إضافة مستخدم جديد', 'can_reports': 'صلاحية التقارير', 'can_excel': 'صلاحية Excel', 'add_btn': 'إضافة', 'current_users': 'المستخدمين الحاليين',
-            'add_new_cat': 'إضافة تصنيف جديد', 'cat_name_placeholder': 'اسم التصنيف (مثال: شكوى مخازن)', 'current_cats': 'التصنيفات الحالية',
-            'branch_stats_title': 'إحصائيات الشكاوى حسب الفرع', 'complaints_count': 'عدد الشكاوى', 'back_home': 'عودة للرئيسية',
-            'current_status': '(الحالية)', 'attachment_label': 'المرفق:',
-            'change_password': 'تغيير كلمة المرور', 'current_password': 'كلمة المرور الحالية', 'new_password': 'كلمة المرور الجديدة',
-            'assign_to': 'إسناد إلى', 'permissions_manage': 'إعدادات الظهور', 'permissions_title': 'التحكم في ظهور الأقسام',
-            'permissions_desc': 'حدد الأدوار التي يمكنها رؤية كل قسم لجميع المستخدمين.', 'notif_title': 'الإشعارات', 'notif_empty': 'لا توجد إشعارات جديدة',
-            'deadline_passed': 'انتهى الموعد', 'deadline_passed_msg': 'تجاوزت المهمة الموعد المحدد', 'confirm_datetime': 'اختر التاريخ والوقت ثم اضغط موافق للتأكيد', 'select_datetime': 'اختر التاريخ والوقت',
-            'user_updated': 'تم تحديث بيانات الموظف بنجاح', 'user_update_error': 'تعذر التحديث (اسم المستخدم قد يكون مستخدماً)',
-            'overview': 'نظرة عامة', 'recent_tasks': 'أحدث المهام', 'view_all': 'عرض الكل', 'open': 'مفتوحة', 'no_tasks': 'لا توجد مهام',
-            'welcome': 'مرحباً', 'brand_tagline': 'إدارة مهام ذكية'
-        }
+    tr_dict = TRANSLATIONS.get(lang, TRANSLATIONS['ar'])
     display_name = current_user.full_name if current_user.is_authenticated else ''
-    return dict(lang=lang, t=t, user_can_see=user_can_see, display_name=display_name, app_version=APP_VERSION, app_name=APP_NAME)
+    return dict(lang=lang, t=tr_dict, user_can_see=user_can_see, display_name=display_name, app_version=APP_VERSION, app_name=APP_NAME)
 
 @app.route('/set_language/<lang_code>')
 def set_language(lang_code):
@@ -303,11 +271,11 @@ def login():
         user = User.query.filter_by(username=request.form.get('username')).first()
         if user and check_password_hash(user.password, request.form.get('password')):
             if not user.is_active:
-                flash('حسابك موقوف.', 'danger')
+                flash_t('account_suspended', 'danger')
                 return redirect(url_for('login'))
             login_user(user)
             return redirect(url_for('dashboard'))
-        flash('خطأ في البيانات', 'danger')
+        flash_t('invalid_login', 'danger')
     return render_template('login.html')
 
 @app.route('/logout')
@@ -324,15 +292,9 @@ def change_my_password():
     if check_password_hash(current_user.password, current_password):
         current_user.password = generate_password_hash(new_password)
         db.session.commit()
-        if session.get('lang', 'ar') == 'ar':
-            flash('تم تغيير كلمة المرور بنجاح', 'success')
-        else:
-            flash('Password changed successfully!', 'success')
+        flash_t('password_changed', 'success')
     else:
-        if session.get('lang', 'ar') == 'ar':
-            flash('كلمة المرور الحالية غير صحيحة', 'danger')
-        else:
-            flash('Incorrect current password!', 'danger')
+        flash_t('wrong_password', 'danger')
             
     return redirect(request.referrer or url_for('dashboard'))
 
@@ -388,7 +350,7 @@ def manager_notifications():
 @login_required
 def reports():
     if not user_can_see('reports'):
-        flash('غير مصرح لك بدخول هذه الصفحة', 'danger')
+        flash_t('access_denied', 'danger')
         return redirect(url_for('dashboard'))
     return render_template('reports.html')
 
@@ -469,7 +431,7 @@ def add_user():
 @admin_required
 def toggle_user_status(id):
     if id == current_user.id:
-        flash('لا يمكنك إيقاف حسابك' if session.get('lang', 'ar') == 'ar' else 'You cannot suspend your own account', 'danger')
+        flash_t('cannot_suspend_self', 'danger')
         return redirect(url_for('manage_users'))
     user = User.query.get_or_404(id); user.is_active = not user.is_active; db.session.commit()
     return redirect(url_for('manage_users'))
@@ -491,8 +453,7 @@ def edit_user(id):
     new_username = request.form.get('username', '').strip()
     existing = User.query.filter(User.username == new_username, User.id != id).first()
     if existing:
-        msg = 'تعذر التحديث (اسم المستخدم مستخدم)' if session.get('lang', 'ar') == 'ar' else 'Could not update (username already exists)'
-        flash(msg, 'danger')
+        flash_t('user_update_error', 'danger')
         return redirect(url_for('manage_users'))
     user.full_name = request.form.get('full_name')
     user.username = new_username
@@ -501,7 +462,7 @@ def edit_user(id):
         user.role = request.form.get('role')
     user.department_id = request.form.get('department_id') or None
     db.session.commit()
-    flash('تم تحديث بيانات الموظف بنجاح' if session.get('lang', 'ar') == 'ar' else 'User updated successfully', 'success')
+    flash_t('user_updated', 'success')
     return redirect(url_for('manage_users'))
 
 @app.route('/admin/hierarchy', methods=['GET', 'POST'])
@@ -534,7 +495,7 @@ def manage_permissions():
             else:
                 db.session.add(FeatureVisibility(feature_key=key, allowed_roles=','.join(roles)))
         db.session.commit()
-        flash('تم حفظ إعدادات الظهور' if session.get('lang', 'ar') == 'ar' else 'Visibility settings saved', 'success')
+        flash_t('permissions_saved', 'success')
         return redirect(url_for('manage_permissions'))
     seed_feature_visibility()
     settings = {s.feature_key: [r.strip() for r in s.allowed_roles.split(',') if r.strip()] for s in FeatureVisibility.query.all()}
@@ -588,13 +549,11 @@ def import_users():
                             user.role = str(row['role']).strip()
 
                 db.session.commit()
-                msg = 'تم استيراد الموظفين والأقسام بنجاح!' if session.get('lang', 'ar') == 'ar' else 'Users and departments imported successfully!'
-                flash(msg, 'success')
+                flash_t('import_success', 'success')
                 return redirect(url_for('manage_users'))
             except Exception as e:
                 db.session.rollback()
-                msg = f'حدث خطأ أثناء الرفع: {str(e)}' if session.get('lang', 'ar') == 'ar' else f'Error during import: {str(e)}'
-                flash(msg, 'danger')
+                flash(f"{tr('import_fail')}: {str(e)}", 'danger')
     return render_template('import_users.html')
 
 @app.route('/admin/download_template')
@@ -620,7 +579,7 @@ def download_template():
 @login_required
 def tasks():
     if not user_can_see('tasks_list'):
-        flash('غير مصرح لك بدخول هذه الصفحة', 'danger')
+        flash_t('access_denied', 'danger')
         return redirect(url_for('dashboard'))
     f = request.args.get('status')
     all_t = Task.query.filter_by(status=f).order_by(Task.created_at.desc()).all() if f else Task.query.order_by(Task.created_at.desc()).all()
@@ -630,7 +589,7 @@ def tasks():
 @login_required
 def create_task():
     if not user_can_see('create_task'):
-        flash('غير مصرح لك بدخول هذه الصفحة', 'danger')
+        flash_t('access_denied', 'danger')
         return redirect(url_for('dashboard'))
     if request.method == 'POST':
         assignee = User.query.get(request.form.get('assigned_to'))
@@ -671,7 +630,7 @@ def create_task():
                 msg.body = f"مهمة جديدة.\nالعنوان: {new_task.title}\nبواسطة: {current_user.full_name}"
                 mail.send(msg)
         except: pass
-        flash('تم إرسال المهمة بنجاح!', 'success')
+        flash_t('task_sent', 'success')
         return redirect(url_for('tasks'))
     return render_template('create_task.html', users=User.query.filter_by(is_active=True).order_by(User.full_name).all())
 
@@ -682,7 +641,7 @@ def task_detail(id):
     if request.method == 'POST':
         ns = request.form.get('status'); cnt = request.form.get('content')
         if ns == 'Completed' and not cnt and TaskUpdate.query.filter_by(task_id=t.id, is_note=False).count() == 0:
-            flash('مرفوض! يجب كتابة تحديث قبل الإكمال.', 'danger')
+            flash_t('update_required', 'danger')
             return redirect(url_for('task_detail', id=t.id))
         
         # تحويل حالة المهمة من "جديدة" إلى "قيد التنفيذ" إذا تم إرسال تحديث
@@ -738,7 +697,7 @@ def task_detail(id):
                     mail.send(msg)
             except: pass
 
-        flash('تم التحديث بنجاح!', 'success')
+        flash_t('update_success', 'success')
         return redirect(url_for('task_detail', id=t.id))
     return render_template('task_detail.html', task=t)
 

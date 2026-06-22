@@ -26,7 +26,7 @@
                 </div>
                 <div class="row mb-3 border-top pt-3">
                     <div class="col-md-4">
-                        <p class="mb-1 text-muted small"><i class="far fa-calendar-alt"></i> تاريخ الإنشاء</p>
+                        <p class="mb-1 text-muted small"><i class="far fa-calendar-alt"></i> {{ t['created_at'] }}</p>
                         <h6>{{ task.created_at.strftime('%Y-%m-%d %I:%M %p') }}</h6>
                     </div>
                     <div class="col-md-4">
@@ -35,7 +35,7 @@
                     </div>
                     <div class="col-md-4">
                         <p class="mb-1 text-muted small">{{ t['priority'] }}</p>
-                        <span class="badge {{ 'bg-danger' if task.priority in ['High', 'Urgent'] else 'bg-warning text-dark' }}">{{ task.priority }}</span>
+                        <span class="badge {{ 'bg-danger' if task.priority in ['High', 'Urgent'] else 'bg-warning text-dark' }}">{{ t['priority_' ~ task.priority.lower()] if ('priority_' ~ task.priority.lower()) in t else task.priority }}</span>
                     </div>
                 </div>
                 <hr>
@@ -86,7 +86,7 @@
                     </div>
                 </div>
                 {% else %}
-                <div class="text-center py-5 text-muted">{{ t['no_tasks'] | default('لا توجد تحديثات') }}</div>
+                <div class="text-center py-5 text-muted">{{ t['no_updates'] }}</div>
                 {% endfor %}
             </div>
         </div>
@@ -102,12 +102,12 @@
                 {% if task.status in ['Closed', 'Overdue_Closed', 'Closed_by_System'] %}
                     <div class="alert alert-danger text-center mb-0 shadow-sm border-0">
                         <i class="fas fa-lock fa-3x mb-3 text-danger opacity-75"></i>
-                        <h6 class="fw-bold mb-0">المهمة مغلقة نهائياً ولا يمكن تعديل حالتها أو إضافة تحديثات.</h6>
+                        <h6 class="fw-bold mb-0">{{ t['task_closed_msg'] }}</h6>
                     </div>
                 {% else %}
                     <form method="POST" enctype="multipart/form-data">
                         <div class="mb-3">
-                            <label class="form-label small text-muted fw-bold">تغيير حالة المهمة ({{ t['status'] }})</label>
+                            <label class="form-label small text-muted fw-bold">{{ t['change_status'] }}</label>
                             <select name="status" class="form-select border-primary shadow-sm">
                                 <option value="{{ task.status }}" selected>{{ t['status_' ~ task.status.replace(' ', '_')] if ('status_' ~ task.status.replace(' ', '_')) in t else task.status }} {{ t['current_status'] }}</option>
                                 <option value="New">{{ t['status_New'] }}</option>
@@ -122,7 +122,7 @@
                         
                         <div class="mb-3">
                             <label class="form-label small text-muted">{{ t['description'] }}</label>
-                            <textarea name="content" class="form-control" rows="4" placeholder="..." required></textarea>
+                            <textarea name="content" class="form-control" rows="4" placeholder="{{ t['update_placeholder'] }}" required></textarea>
                         </div>
 
                         {% if current_user.role in ['admin', 'CEO', 'Section Head', 'Manager'] %}
@@ -141,7 +141,7 @@
                         
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary fw-bold btn-lg shadow-sm">
-                                <i class="fas fa-save me-2"></i> حفظ الحالة وإرسال التحديث
+                                <i class="fas fa-save me-2"></i> {{ t['save_update_btn'] }}
                             </button>
                         </div>
                     </form>

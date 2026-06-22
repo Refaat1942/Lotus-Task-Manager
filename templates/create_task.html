@@ -41,7 +41,7 @@
             <div class="card-body p-4">
                 <form method="POST" enctype="multipart/form-data" action="/tasks/create">
                     
-                    <h5 class="text-secondary mb-3 border-bottom pb-2">🎯 {{ t['task_details_title'] }}</h5>
+                    <h5 class="text-secondary mb-3 border-bottom pb-2"><i class="fas fa-clipboard-list me-2"></i>{{ t['task_details_title'] }}</h5>
                     
                     <div class="mb-3">
                         <label class="form-label fw-bold">{{ t['task_title'] }} <span class="text-danger">*</span></label>
@@ -116,7 +116,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const lang = "{{ lang }}";
-    const okLabel = lang === 'ar' ? 'موافق' : 'OK';
+    const okLabel = "{{ t['ok_btn'] }}";
     const hiddenInput = document.getElementById('deadlineHidden');
 
     function syncDeadlineHidden(selectedDates) {

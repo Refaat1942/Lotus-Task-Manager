@@ -77,7 +77,7 @@
                         <td class="ps-4 fw-bold">#{{ task.id }}</td>
                         <td>
                             <div class="fw-bold text-dark">{{ task.title }}</div>
-                            <span class="badge {{ 'bg-danger' if task.priority == 'Urgent' else 'bg-secondary' }}">{{ task.priority }}</span>
+                            <span class="badge {{ 'bg-danger' if task.priority == 'Urgent' else 'bg-secondary' }}">{{ t['priority_' ~ task.priority.lower()] if ('priority_' ~ task.priority.lower()) in t else task.priority }}</span>
                         </td>
                         <td>{{ task.creator.full_name }}</td>
                         <td>{{ task.assignee.full_name }}</td>

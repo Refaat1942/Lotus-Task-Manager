@@ -51,6 +51,13 @@
             animation-play-state: paused;
             transform: scale(1.08);
         }
+        /* Sidebar: glow only — no vertical float (prevents overlap with menu) */
+        .sidebar .ltm-logo-animated {
+            animation: ltm-logo-glow 4s ease-in-out infinite;
+        }
+        .sidebar .ltm-logo-wrap:hover .ltm-logo-animated {
+            transform: scale(1.04);
+        }
         html, body { height: 100%; margin: 0; }
         body {
             font-family: {{ t['font'] | default("'Cairo', sans-serif") }};
@@ -66,10 +73,8 @@
             width: var(--ltm-sidebar-w);
             position: fixed;
             top: 0;
-            overflow-y: auto;
-            overflow-x: hidden;
+            overflow: hidden;
             z-index: 1000;
-            -webkit-overflow-scrolling: touch;
             border-inline-end: 1px solid var(--ltm-border);
             box-shadow: 0 0 24px rgba(15, 23, 42, 0.04);
         }
@@ -87,40 +92,57 @@
         html[dir="rtl"] .main-content { margin-right: var(--ltm-sidebar-w); }
         html[dir="ltr"] .main-content { margin-left: var(--ltm-sidebar-w); }
         .sidebar-brand {
-            padding: 1.75rem 1.25rem 1.5rem;
+            flex: 0 0 auto;
+            padding: 1rem 1rem 0.75rem;
             text-align: center;
             border-bottom: 1px solid var(--ltm-border);
             background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 55%, #eff6ff 100%);
-            min-height: 200px;
+        }
+        .sidebar .ltm-logo-wrap {
+            margin-bottom: 0.35rem;
+            max-height: 82px;
+            overflow: hidden;
         }
         .sidebar-logo {
-            width: 130px;
+            max-height: 76px;
+            width: auto;
+            max-width: 100%;
             height: auto;
-            max-height: 130px;
             object-fit: contain;
+            display: block;
+            margin: 0 auto;
         }
         .sidebar-brand .brand-title {
-            font-size: 1.2rem;
+            font-size: 1rem;
             font-weight: 700;
             color: #0f172a;
-            line-height: 1.35;
-            margin-bottom: 0.25rem;
-            margin-top: 0.35rem;
+            line-height: 1.2;
+            margin-bottom: 0.15rem;
+            margin-top: 0.15rem;
         }
         .sidebar-brand .brand-tagline {
-            font-size: 0.78rem;
+            font-size: 0.72rem;
             color: var(--ltm-green);
             font-weight: 600;
-            letter-spacing: 0.02em;
+            letter-spacing: 0.01em;
+            line-height: 1.2;
         }
         .sidebar-brand .brand-version {
-            font-size: 0.68rem;
+            font-size: 0.62rem;
             color: var(--ltm-sidebar-muted);
-            margin-top: 0.5rem;
+            margin-top: 0.35rem;
             display: inline-block;
-            padding: 0.15rem 0.55rem;
+            padding: 0.12rem 0.5rem;
             background: #f1f5f9;
             border-radius: 999px;
+        }
+        .sidebar-nav {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0;
+            -webkit-overflow-scrolling: touch;
+            padding-top: 0.35rem;
         }
         .sidebar-section {
             font-size: 0.65rem;
@@ -138,7 +160,7 @@
             padding: 0.7rem 1.25rem;
             transition: 0.2s;
             font-size: 0.92rem;
-            font-weight: 500;
+            font-weight: 700;
             border-radius: 0;
         }
         html[dir="rtl"] .sidebar a:hover,
@@ -157,7 +179,7 @@
         }
         .sidebar a i { width: 1.35rem; opacity: 0.85; }
         .sidebar .sidebar-footer {
-            margin-top: auto;
+            flex: 0 0 auto;
             border-top: 1px solid var(--ltm-border);
             padding-top: 0.5rem;
             padding-bottom: 1rem;
@@ -280,7 +302,8 @@
             <div class="brand-tagline">{{ t['brand_tagline'] }}</div>
             <div class="brand-version">v{{ app_version }}</div>
         </div>
-        
+
+        <div class="sidebar-nav">
         {% if user_can_see('dashboard') %}
         <a href="/dashboard"><i class="fas fa-chart-pie fa-fw mx-2"></i> {{ t['dashboard'] }}</a>
         {% endif %}
@@ -292,12 +315,12 @@
         {% endif %}
         
         {% if user_can_see('reports') %}
-        <div class="sidebar-section">Reports & Tools</div>
+        <div class="sidebar-section">{{ t['section_reports'] }}</div>
         <a href="/reports"><i class="fas fa-chart-line fa-fw mx-2"></i> {{ t['reports'] }}</a>
         {% endif %}
 
         {% if current_user.role in ['admin', 'CEO'] %}
-        <div class="sidebar-section">Admin Tools</div>
+        <div class="sidebar-section">{{ t['section_admin'] }}</div>
         {% if user_can_see('users_manage') %}
         <a href="/admin/users"><i class="fas fa-users-cog fa-fw mx-2"></i> {{ t['users_manage'] }}</a>
         {% endif %}
@@ -309,8 +332,9 @@
         {% endif %}
         <a href="/admin/permissions"><i class="fas fa-eye fa-fw mx-2"></i> {{ t['permissions_manage'] }}</a>
         {% endif %}
+        </div>
         
-        <div class="sidebar-footer mt-auto">
+        <div class="sidebar-footer">
             <a href="#" data-bs-toggle="modal" data-bs-target="#changeMyPassModal">
                 <i class="fas fa-key fa-fw mx-2"></i> {{ t['change_password'] }}
             </a>
@@ -411,7 +435,15 @@
         document.addEventListener('DOMContentLoaded', function() {
             updateBadgeUI();
             initNotifications();
-            setInterval(checkNotifications, 5000);
+
+            const NOTIF_POLL_MS = 2000;
+            setInterval(checkNotifications, NOTIF_POLL_MS);
+            setTimeout(checkNotifications, 800);
+
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden) checkNotifications();
+            });
+            window.addEventListener('focus', checkNotifications);
 
             let bell = document.getElementById('bellIcon');
             if (bell) {
@@ -423,6 +455,7 @@
             }
 
             document.body.addEventListener('click', unlockAudio, { once: true });
+            document.body.addEventListener('keydown', unlockAudio, { once: true });
         });
 
         let audioCtx = null;
@@ -437,26 +470,28 @@
             try {
                 if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 if (audioCtx.state === 'suspended') audioCtx.resume();
-                const notes = [
-                    { freq: 392.0, start: 0, dur: 0.55 },
-                    { freq: 523.25, start: 0.18, dur: 0.55 },
-                    { freq: 659.25, start: 0.36, dur: 0.65 },
-                    { freq: 783.99, start: 0.58, dur: 0.85 },
-                    { freq: 987.77, start: 0.82, dur: 1.1 }
+                const t0 = audioCtx.currentTime;
+                const melody = [
+                    { freq: 523.25, start: 0.00, dur: 0.75, vol: 0.20, type: 'sine' },
+                    { freq: 659.25, start: 0.22, dur: 0.75, vol: 0.22, type: 'sine' },
+                    { freq: 783.99, start: 0.44, dur: 0.85, vol: 0.24, type: 'triangle' },
+                    { freq: 987.77, start: 0.68, dur: 0.95, vol: 0.26, type: 'sine' },
+                    { freq: 1174.66, start: 0.92, dur: 1.15, vol: 0.22, type: 'triangle' },
+                    { freq: 1318.51, start: 1.18, dur: 1.35, vol: 0.18, type: 'sine' }
                 ];
-                notes.forEach(n => {
+                melody.forEach(n => {
                     const osc = audioCtx.createOscillator();
                     const gain = audioCtx.createGain();
-                    osc.type = 'sine';
+                    osc.type = n.type;
                     osc.frequency.value = n.freq;
                     osc.connect(gain);
                     gain.connect(audioCtx.destination);
-                    const t0 = audioCtx.currentTime + n.start;
-                    gain.gain.setValueAtTime(0.0001, t0);
-                    gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.06);
-                    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + n.dur);
-                    osc.start(t0);
-                    osc.stop(t0 + n.dur + 0.05);
+                    const start = t0 + n.start;
+                    gain.gain.setValueAtTime(0.0001, start);
+                    gain.gain.exponentialRampToValueAtTime(n.vol, start + 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, start + n.dur);
+                    osc.start(start);
+                    osc.stop(start + n.dur + 0.08);
                 });
             } catch (e) { console.log('Audio unavailable'); }
         }
@@ -497,13 +532,20 @@
         }
 
         function initNotifications() {
-            if (localStorage.getItem('notif_initialized')) return;
+            const boot = () => {
+                localStorage.setItem('notif_initialized', '1');
+                checkNotifications();
+            };
+            if (localStorage.getItem('last_notif_id') !== null) {
+                boot();
+                return;
+            }
             fetch('/api/notifications?since=0')
                 .then(r => r.json())
                 .then(data => {
                     localStorage.setItem('last_notif_id', data.latest_id || 0);
-                    localStorage.setItem('notif_initialized', '1');
-                }).catch(() => {});
+                    boot();
+                }).catch(boot);
         }
 
         function checkNotifications() {
