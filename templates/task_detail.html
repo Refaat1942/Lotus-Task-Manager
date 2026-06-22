@@ -56,7 +56,7 @@
             <div class="card-header bg-dark text-white py-3">
                 <i class="fas fa-history me-2"></i> {{ t['history_updates'] }}
             </div>
-            <div class="card-body bg-light" style="max-height: 600px; overflow-y: auto;">
+            <div class="card-body bg-light card-scroll">
                 {% for update in task.updates %}
                 <div class="d-flex mb-4">
                     <div class="flex-shrink-0">
@@ -114,7 +114,7 @@
                                 <option value="In Progress">{{ t['status_In Progress'] }}</option>
                                 <option value="Under Review">{{ t['status_Under Review'] }}</option>
                                 <option value="Completed">{{ t['status_Completed'] }}</option>
-                                {% if current_user.role in ['admin', 'head', 'Manager', 'CEO'] %}
+                                {% if current_user.role in ['admin', 'CEO', 'Section Head', 'Manager'] %}
                                 <option value="Closed">{{ t['status_Closed'] }}</option>
                                 {% endif %}
                             </select>
@@ -125,7 +125,7 @@
                             <textarea name="content" class="form-control" rows="4" placeholder="..." required></textarea>
                         </div>
 
-                        {% if current_user.role in ['admin', 'head', 'Manager', 'CEO'] %}
+                        {% if current_user.role in ['admin', 'CEO', 'Section Head', 'Manager'] %}
                         <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" name="is_note" id="isNote">
                             <label class="form-check-label text-info fw-bold" for="isNote">

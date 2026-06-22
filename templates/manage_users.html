@@ -12,7 +12,7 @@
 
 <div class="card shadow-sm border-0">
     <div class="card-body p-0">
-        <div class="table-responsive">
+        <div class="table-responsive scroll-panel">
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light">
                     <tr>
@@ -41,14 +41,25 @@
                             {% endif %}
                         </td>
                         <td>
+                            <button type="button" class="btn btn-sm btn-outline-primary btn-edit-user"
+                                title="{{ t['edit'] }}"
+                                data-id="{{ u.id }}"
+                                data-full-name="{{ u.full_name }}"
+                                data-username="{{ u.username }}"
+                                data-email="{{ u.email or '' }}"
+                                data-department="{{ u.department_id or '' }}"
+                                data-role="{{ u.role }}"
+                                data-is-self="{{ '1' if u.id == current_user.id else '0' }}">
+                                <i class="fas fa-edit"></i>
+                            </button>
                             {% if u.id != current_user.id %}
-                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editUserModal{{ u.id }}" title="{{ t['edit'] }}"><i class="fas fa-edit"></i></button>
                             <form action="/admin/user/toggle_status/{{ u.id }}" method="POST" class="d-inline">
                                 <button type="submit" class="btn btn-sm {{ 'btn-outline-danger' if u.is_active else 'btn-outline-success' }}" title="{{ t['block_unblock'] }}"><i class="fas {{ 'fa-ban' if u.is_active else 'fa-check' }}"></i></button>
                             </form>
-                            <button class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#resetPassModal{{ u.id }}" title="{{ t['reset_pass'] }}"><i class="fas fa-key"></i></button>
-                            {% else %}
-                            <span class="text-muted small">--</span>
+                            <button type="button" class="btn btn-sm btn-outline-warning btn-reset-pass"
+                                data-id="{{ u.id }}" data-name="{{ u.full_name }}" title="{{ t['reset_pass'] }}">
+                                <i class="fas fa-key"></i>
+                            </button>
                             {% endif %}
                         </td>
                     </tr>
@@ -59,50 +70,47 @@
     </div>
 </div>
 
-{% for u in users %}
-<div class="modal fade" id="editUserModal{{ u.id }}" tabindex="-1">
-    <div class="modal-dialog">
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">{{ t['edit'] }}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form action="/admin/user/edit/{{ u.id }}" method="POST">
+            <form id="editUserForm" method="POST">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label>{{ t['full_name'] }}</label>
-                        <input type="text" name="full_name" class="form-control" value="{{ u.full_name }}" required>
+                        <input type="text" name="full_name" id="editFullName" class="form-control" required>
                     </div>
                     <div class="mb-3">
                         <label>{{ t['username'] }}</label>
-                        <input type="text" name="username" class="form-control" value="{{ u.username }}" required>
+                        <input type="text" name="username" id="editUsername" class="form-control" required>
                     </div>
                     <div class="mb-3">
-                        <label>{{ t['email'] | default('البريد الإلكتروني') }}</label>
-                        <input type="email" name="email" class="form-control" value="{{ u.email if u.email else '' }}">
+                        <label>{{ t['email'] }}</label>
+                        <input type="email" name="email" id="editEmail" class="form-control">
                     </div>
                     <div class="mb-3">
                         <label>{{ t['department'] }}</label>
-                        <select name="department_id" class="form-select">
+                        <select name="department_id" id="editDepartment" class="form-select">
                             <option value="">{{ t['no_dept'] }}</option>
                             {% for d in departments %}
-                            <option value="{{ d.id }}" {% if u.department_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+                            <option value="{{ d.id }}">{{ d.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-3" id="editRoleGroup">
                         <label>{{ t['role'] }}</label>
-                        <select name="role" class="form-select">
-                            <option value="CEO" {% if u.role == 'CEO' %}selected{% endif %}>CEO</option>
-                            <option value="Section Head" {% if u.role == 'Section Head' %}selected{% endif %}>Section Head</option>
-                            <option value="Manager" {% if u.role == 'Manager' %}selected{% endif %}>Manager</option>
-                            <option value="Second line manager" {% if u.role == 'Second line manager' %}selected{% endif %}>Second line manager</option>
-                            <option value="Employee" {% if u.role == 'Employee' %}selected{% endif %}>Employee</option>
-                            <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Admin</option>
+                        <select name="role" id="editRole" class="form-select">
+                            {% for r in roles %}
+                            <option value="{{ r }}">{{ r }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                 </div>
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t['cancel'] }}</button>
                     <button type="submit" class="btn btn-primary">{{ t['save'] }}</button>
                 </div>
             </form>
@@ -110,16 +118,16 @@
     </div>
 </div>
 
-<div class="modal fade" id="resetPassModal{{ u.id }}" tabindex="-1">
-    <div class="modal-dialog">
+<div class="modal fade" id="resetPassModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">{{ t['reset_pass'] }} - {{ u.full_name }}</h5>
+                <h5 class="modal-title" id="resetPassTitle">{{ t['reset_pass'] }}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form action="/admin/user/reset_password/{{ u.id }}" method="POST">
+            <form id="resetPassForm" method="POST">
                 <div class="modal-body">
-                    <label class="form-label text-danger fw-bold">كلمة المرور الجديدة / New Password</label>
+                    <label class="form-label text-danger fw-bold">{{ t['new_password'] }}</label>
                     <input type="password" name="new_password" class="form-control" required minlength="6">
                 </div>
                 <div class="modal-footer">
@@ -129,10 +137,9 @@
         </div>
     </div>
 </div>
-{% endfor %}
 
 <div class="modal fade" id="addUserModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">{{ t['add_user'] }}</h5>
@@ -147,6 +154,10 @@
                     <div class="mb-3">
                         <label>{{ t['username'] }}</label>
                         <input type="text" name="username" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>{{ t['email'] }}</label>
+                        <input type="email" name="email" class="form-control">
                     </div>
                     <div class="mb-3">
                         <label>{{ t['password'] }}</label>
@@ -164,12 +175,9 @@
                     <div class="mb-3">
                         <label>{{ t['role'] }}</label>
                         <select name="role" class="form-select">
-                            <option value="CEO">CEO</option>
-                            <option value="Section Head">Section Head</option>
-                            <option value="Manager">Manager</option>
-                            <option value="Second line manager">Second line manager</option>
-                            <option value="Employee">Employee</option>
-                            <option value="admin">Admin</option>
+                            {% for r in roles %}
+                            <option value="{{ r }}">{{ r }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                 </div>
@@ -180,4 +188,27 @@
         </div>
     </div>
 </div>
+
+<script>
+document.querySelectorAll('.btn-edit-user').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const id = this.dataset.id;
+        document.getElementById('editUserForm').action = '/admin/user/edit/' + id;
+        document.getElementById('editFullName').value = this.dataset.fullName;
+        document.getElementById('editUsername').value = this.dataset.username;
+        document.getElementById('editEmail').value = this.dataset.email;
+        document.getElementById('editDepartment').value = this.dataset.department;
+        document.getElementById('editRole').value = this.dataset.role;
+        document.getElementById('editRoleGroup').style.display = this.dataset.isSelf === '1' ? 'none' : 'block';
+        new bootstrap.Modal(document.getElementById('editUserModal')).show();
+    });
+});
+document.querySelectorAll('.btn-reset-pass').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.getElementById('resetPassForm').action = '/admin/user/reset_password/' + this.dataset.id;
+        document.getElementById('resetPassTitle').textContent = '{{ t["reset_pass"] }} - ' + this.dataset.name;
+        new bootstrap.Modal(document.getElementById('resetPassModal')).show();
+    });
+});
+</script>
 {% endblock %}

@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-1"><i class="fas fa-eye-slash"></i> {{ t['permissions_title'] }}</h3>
+        <p class="text-muted mb-0">{{ t['permissions_desc'] }}</p>
+    </div>
+</div>
+
+<form method="POST">
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th style="min-width: 200px;">{{ t['action'] }}</th>
+                            {% for role in roles %}
+                            <th class="text-center small">{{ role }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for key, labels in features.items() %}
+                        <tr>
+                            <td class="fw-bold">{{ labels[lang] if lang in labels else labels['en'] }}</td>
+                            {% for role in roles %}
+                            <td class="text-center">
+                                <input type="checkbox" class="form-check-input" name="feature_{{ key }}" value="{{ role }}"
+                                    {% if role in settings.get(key, []) %}checked{% endif %}>
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-white text-end">
+            <button type="submit" class="btn btn-primary fw-bold"><i class="fas fa-save"></i> {{ t['save'] }}</button>
+        </div>
+    </div>
+</form>
+{% endblock %}

@@ -2,7 +2,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="fw-bold text-dark"><i class="fas fa-list"></i> {{ t['tasks_list'] }}</h3>
-    {% if current_user.role in ['admin', 'head', 'Manager', 'CEO'] %}
+    {% if user_can_see('create_task') %}
     <a href="/tasks/create" class="btn btn-primary"><i class="fas fa-plus"></i> {{ t['new_task'] }}</a>
     {% endif %}
 </div>
@@ -21,7 +21,7 @@
 
 <div class="card shadow-sm border-0">
     <div class="card-body p-0">
-        <div class="table-responsive">
+        <div class="table-responsive scroll-panel">
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light text-secondary">
                     <tr>

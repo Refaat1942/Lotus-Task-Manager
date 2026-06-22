@@ -1,5 +1,8 @@
 {% extends "layout.html" %}
 {% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">
+
 <div class="row justify-content-center">
     <div class="col-md-9">
         <div class="card shadow-lg border-0">
@@ -31,7 +34,9 @@
 
                         <div class="col-md-6">
                             <label class="form-label fw-bold text-danger"><i class="fas fa-clock"></i> {{ t['deadline'] }}</label>
-                            <input type="datetime-local" name="deadline" class="form-control border-danger">
+                            <input type="text" id="deadlinePicker" class="form-control border-danger" placeholder="{{ t['select_datetime'] }}" readonly>
+                            <input type="hidden" name="deadline" id="deadlineHidden">
+                            <small class="text-muted">{{ t['confirm_datetime'] }} = {{ t['select_datetime'] }}</small>
                         </div>
                     </div>
 
@@ -76,4 +81,35 @@
         </div>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/confirmDate/confirmDate.js"></script>
+<script>
+const lang = "{{ lang }}";
+const fp = flatpickr("#deadlinePicker", {
+    enableTime: true,
+    time_24hr: true,
+    dateFormat: "Y-m-d H:i",
+    minDate: "today",
+    allowInput: false,
+    disableMobile: true,
+    plugins: [new confirmDatePlugin({
+        confirmIcon: "<i class='fas fa-check'></i>",
+        confirmText: lang === 'ar' ? 'موافق' : 'OK',
+        showAlways: true,
+        theme: "light"
+    })],
+    onChange: function(selectedDates, dateStr) {
+        if (selectedDates.length) {
+            const d = selectedDates[0];
+            const pad = n => String(n).padStart(2, '0');
+            document.getElementById('deadlineHidden').value =
+                d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) +
+                'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        } else {
+            document.getElementById('deadlineHidden').value = '';
+        }
+    }
+});
+</script>
 {% endblock %}

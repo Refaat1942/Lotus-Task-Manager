@@ -1,7 +1,8 @@
 import io
 import os
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, make_response
+from functools import wraps
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, make_response, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -31,6 +32,28 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 AVAILABLE_ROLES = ['CEO', 'Section Head', 'Manager', 'Second line manager', 'Employee', 'admin']
+
+DEFAULT_FEATURE_VISIBILITY = {
+    'dashboard': AVAILABLE_ROLES,
+    'create_task': AVAILABLE_ROLES,
+    'tasks_list': AVAILABLE_ROLES,
+    'reports': ['admin', 'CEO', 'Manager', 'Section Head'],
+    'users_manage': ['admin', 'CEO'],
+    'departments_manage': ['admin', 'CEO'],
+    'hierarchy_manage': ['admin', 'CEO'],
+    'import_users': ['admin', 'CEO'],
+}
+
+FEATURE_LABELS = {
+    'dashboard': {'ar': 'لوحة المراقبة', 'en': 'Dashboard'},
+    'create_task': {'ar': 'إسناد مهمة', 'en': 'Assign Task'},
+    'tasks_list': {'ar': 'قائمة المهام', 'en': 'Tasks List'},
+    'reports': {'ar': 'التقارير', 'en': 'Reports'},
+    'users_manage': {'ar': 'إدارة الموظفين', 'en': 'Manage Users'},
+    'departments_manage': {'ar': 'إدارة الأقسام', 'en': 'Manage Departments'},
+    'hierarchy_manage': {'ar': 'شجرة الصلاحيات', 'en': 'Hierarchy Rules'},
+    'import_users': {'ar': 'استيراد الموظفين', 'en': 'Import Users'},
+}
 
 # --- النماذج (Models) ---
 class Department(db.Model):
@@ -95,8 +118,58 @@ class TaskUpdate(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     user = db.relationship('User')
 
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    type = db.Column(db.String(50))
+    title = db.Column(db.String(200))
+    message = db.Column(db.Text)
+    link = db.Column(db.String(200), nullable=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('task.id'), nullable=True)
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    user = db.relationship('User', backref='notifications')
+
+class FeatureVisibility(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    feature_key = db.Column(db.String(50), unique=True, nullable=False)
+    allowed_roles = db.Column(db.Text)
+
 @login_manager.user_loader
 def load_user(user_id): return User.query.get(int(user_id))
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role not in ['admin', 'CEO']:
+            flash('غير مصرح لك بدخول هذه الصفحة' if session.get('lang', 'ar') == 'ar' else 'Access denied', 'danger')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated
+
+def user_can_see(feature_key):
+    if not current_user.is_authenticated:
+        return False
+    setting = FeatureVisibility.query.filter_by(feature_key=feature_key).first()
+    if not setting:
+        default_roles = DEFAULT_FEATURE_VISIBILITY.get(feature_key, AVAILABLE_ROLES)
+        return current_user.role in default_roles
+    roles = [r.strip() for r in setting.allowed_roles.split(',') if r.strip()]
+    return current_user.role in roles
+
+def create_notification(user_id, ntype, title, message, link=None, task_id=None):
+    if not user_id:
+        return
+    db.session.add(Notification(
+        user_id=user_id, type=ntype, title=title,
+        message=message, link=link, task_id=task_id
+    ))
+
+def seed_feature_visibility():
+    for key, roles in DEFAULT_FEATURE_VISIBILITY.items():
+        if not FeatureVisibility.query.filter_by(feature_key=key).first():
+            db.session.add(FeatureVisibility(feature_key=key, allowed_roles=','.join(roles)))
+    db.session.commit()
 
 # --- الترجمة ---
 @app.context_processor
@@ -111,7 +184,11 @@ def inject_translations():
             'add_new_cat': 'Add New Category', 'cat_name_placeholder': 'Category Name (e.g. Warehouse)', 'current_cats': 'Current Categories',
             'branch_stats_title': 'Complaints by Branch', 'complaints_count': 'Complaints Count', 'back_home': 'Back to Home',
             'current_status': '(Current)', 'attachment_label': 'Attachment:',
-            'change_password': 'Change Password', 'current_password': 'Current Password', 'new_password': 'New Password'
+            'change_password': 'Change Password', 'current_password': 'Current Password', 'new_password': 'New Password',
+            'assign_to': 'Assign To', 'permissions_manage': 'Visibility Settings', 'permissions_title': 'Feature Visibility Control',
+            'permissions_desc': 'Choose which roles can see each section for all users.', 'notif_title': 'Notifications', 'notif_empty': 'No new notifications',
+            'deadline_passed': 'Deadline Passed', 'deadline_passed_msg': 'Task deadline has passed', 'confirm_datetime': 'OK', 'select_datetime': 'Select date & time',
+            'user_updated': 'User updated successfully', 'user_update_error': 'Could not update user (username may already exist)'
         }
     else:
         t = {
@@ -122,9 +199,13 @@ def inject_translations():
             'add_new_cat': 'إضافة تصنيف جديد', 'cat_name_placeholder': 'اسم التصنيف (مثال: شكوى مخازن)', 'current_cats': 'التصنيفات الحالية',
             'branch_stats_title': 'إحصائيات الشكاوى حسب الفرع', 'complaints_count': 'عدد الشكاوى', 'back_home': 'عودة للرئيسية',
             'current_status': '(الحالية)', 'attachment_label': 'المرفق:',
-            'change_password': 'تغيير كلمة المرور', 'current_password': 'كلمة المرور الحالية', 'new_password': 'كلمة المرور الجديدة'
+            'change_password': 'تغيير كلمة المرور', 'current_password': 'كلمة المرور الحالية', 'new_password': 'كلمة المرور الجديدة',
+            'assign_to': 'إسناد إلى', 'permissions_manage': 'إعدادات الظهور', 'permissions_title': 'التحكم في ظهور الأقسام',
+            'permissions_desc': 'حدد الأدوار التي يمكنها رؤية كل قسم لجميع المستخدمين.', 'notif_title': 'الإشعارات', 'notif_empty': 'لا توجد إشعارات جديدة',
+            'deadline_passed': 'انتهى الموعد', 'deadline_passed_msg': 'تجاوزت المهمة الموعد المحدد', 'confirm_datetime': 'موافق', 'select_datetime': 'اختر التاريخ والوقت',
+            'user_updated': 'تم تحديث بيانات الموظف بنجاح', 'user_update_error': 'تعذر التحديث (اسم المستخدم قد يكون مستخدماً)'
         }
-    return dict(lang=lang, t=t)
+    return dict(lang=lang, t=t, user_can_see=user_can_see)
 
 @app.route('/set_language/<lang_code>')
 def set_language(lang_code):
@@ -142,6 +223,13 @@ def automated_system_checks():
         for t in neglected_tasks:
             t.status = 'Closed_by_System'
             db.session.add(TaskUpdate(content="[إجراء تلقائي] تم الإغلاق بواسطة النظام: الموظف لم يفتح المهمة خلال 10 دقائق من إرسالها.", is_note=True, task_id=t.id, user_id=t.creator_id))
+            if t.creator_id:
+                create_notification(
+                    t.creator_id, 'task_update',
+                    'إغلاق تلقائي / Auto Closed',
+                    f"المهمة '{t.title}' أُغلقت — الموظف لم يفتحها خلال 10 دقائق",
+                    link=f'/tasks/{t.id}', task_id=t.id
+                )
             try:
                 recipients = [t.creator.email] if t.creator.email else []
                 cc_list = [t.head.email] if (t.head and t.head.email) else []
@@ -157,6 +245,27 @@ def automated_system_checks():
             t.status = 'Overdue_Closed'
             t.completed_at = now
             db.session.add(TaskUpdate(content="[إجراء تلقائي] تم إغلاق المهمة إجبارياً لتجاوز الموعد المحدد (Deadline).", is_note=True, task_id=t.id, user_id=t.creator_id))
+            if t.creator_id:
+                create_notification(
+                    t.creator_id, 'deadline_passed',
+                    'انتهى موعد المهمة / Deadline Passed',
+                    f"المهمة '{t.title}' تجاوزت الموعد المحدد",
+                    link=f'/tasks/{t.id}', task_id=t.id
+                )
+            if t.head_id and t.head_id != t.creator_id:
+                create_notification(
+                    t.head_id, 'deadline_passed',
+                    'انتهى موعد المهمة / Deadline Passed',
+                    f"المهمة '{t.title}' تجاوزت الموعد المحدد",
+                    link=f'/tasks/{t.id}', task_id=t.id
+                )
+            try:
+                if t.creator and t.creator.email:
+                    cc_list = [t.head.email] if (t.head and t.head.email) else []
+                    msg = Message(f"تنبيه: انتهى موعد المهمة #{t.id}", sender=app.config['MAIL_USERNAME'], recipients=[t.creator.email], cc=cc_list)
+                    msg.body = f"المهمة '{t.title}' تجاوزت الموعد المحدد وتم إغلاقها تلقائياً.\nالمسؤول: {t.assignee.full_name if t.assignee else '--'}"
+                    mail.send(msg)
+            except: pass
         
         # 3. المهام المتكررة
         recurring = Task.query.filter(Task.recurrence != 'None', Task.next_run <= now).all()
@@ -221,39 +330,55 @@ def change_my_password():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    if not user_can_see('dashboard'):
+        return redirect(url_for('tasks'))
     stats = {'total_tasks': Task.query.count(), 'in_progress': Task.query.filter_by(status='In Progress').count(), 'overdue': len([t for t in Task.query.all() if t.is_overdue]), 'completed': Task.query.filter_by(status='Completed').count()}
     recent = Task.query.order_by(Task.created_at.desc()).limit(5).all()
     return render_template('dashboard.html', stats=stats, recent_tasks=recent, today_date=datetime.now().strftime('%Y-%m-%d'))
 
 # --- الإشعارات الحية ---
+@app.route('/api/notifications')
+@login_required
+def get_notifications():
+    since = request.args.get('since', 0, type=int)
+    items = Notification.query.filter(
+        Notification.user_id == current_user.id,
+        Notification.id > since
+    ).order_by(Notification.id.asc()).limit(30).all()
+    latest = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.id.desc()).first()
+    return jsonify({
+        'notifications': [{
+            'id': n.id, 'type': n.type, 'title': n.title,
+            'message': n.message, 'link': n.link or (f'/tasks/{n.task_id}' if n.task_id else '#'),
+            'created_at': n.created_at.strftime('%Y-%m-%d %H:%M')
+        } for n in items],
+        'latest_id': latest.id if latest else since
+    })
+
+@app.route('/api/notifications/mark_read', methods=['POST'])
+@login_required
+def mark_notifications_read():
+    Notification.query.filter_by(user_id=current_user.id, is_read=False).update({'is_read': True})
+    db.session.commit()
+    return jsonify({'ok': True})
+
 @app.route('/api/task_notifications')
 @login_required
 def task_notifications():
-    latest = Task.query.filter_by(assignee_id=current_user.id).order_by(Task.id.desc()).first()
-    return jsonify({'latest_task_id': latest.id if latest else 0, 'task_title': latest.title if latest else ''})
+    latest = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.id.desc()).first()
+    return jsonify({'latest_id': latest.id if latest else 0})
 
 @app.route('/api/manager_notifications')
 @login_required
 def manager_notifications():
-    latest_update = TaskUpdate.query.join(Task).filter(
-        (Task.creator_id == current_user.id) | (Task.head_id == current_user.id)
-    ).order_by(TaskUpdate.id.desc()).first()
-    
-    if latest_update and latest_update.user_id != current_user.id:
-        return jsonify({
-            'update_id': latest_update.id,
-            'task_id': latest_update.task_id,
-            'task_title': latest_update.task.title,
-            'status': latest_update.task.status,
-            'by': latest_update.user.full_name
-        })
-    return jsonify({'update_id': 0})
+    latest = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.id.desc()).first()
+    return jsonify({'latest_id': latest.id if latest else 0})
 
 # --- التقارير والتصدير ---
 @app.route('/reports')
 @login_required
 def reports():
-    if current_user.role not in ['admin', 'CEO', 'Manager', 'Section Head']:
+    if not user_can_see('reports'):
         flash('غير مصرح لك بدخول هذه الصفحة', 'danger')
         return redirect(url_for('dashboard'))
     return render_template('reports.html')
@@ -261,6 +386,8 @@ def reports():
 @app.route('/reports/export/<type>')
 @login_required
 def export_excel(type):
+    if not user_can_see('reports'):
+        abort(403)
     output = io.StringIO()
     import csv
     writer = csv.writer(output)
@@ -284,6 +411,7 @@ def export_excel(type):
 # --- إدارة الأقسام ---
 @app.route('/admin/departments', methods=['GET'])
 @login_required
+@admin_required
 def manage_departments():
     departments = Department.query.all()
     heads = User.query.filter(User.role.in_(['Manager', 'Section Head', 'CEO', 'admin'])).all()
@@ -291,6 +419,7 @@ def manage_departments():
 
 @app.route('/admin/departments/add', methods=['POST'])
 @login_required
+@admin_required
 def add_department():
     name = request.form.get('name')
     head_id = request.form.get('head_id')
@@ -302,6 +431,7 @@ def add_department():
 
 @app.route('/admin/departments/delete/<int:id>')
 @login_required
+@admin_required
 def delete_department(id):
     dept = Department.query.get_or_404(id)
     for u in dept.users: u.department_id = None
@@ -312,10 +442,12 @@ def delete_department(id):
 # --- إدارة الموظفين ---
 @app.route('/admin/users')
 @login_required
-def manage_users(): return render_template('manage_users.html', users=User.query.all(), departments=Department.query.all())
+@admin_required
+def manage_users(): return render_template('manage_users.html', users=User.query.all(), departments=Department.query.all(), roles=AVAILABLE_ROLES)
 
 @app.route('/admin/add_user', methods=['POST'])
 @login_required
+@admin_required
 def add_user():
     username = request.form.get('username')
     if not User.query.filter_by(username=username).first():
@@ -325,12 +457,17 @@ def add_user():
 
 @app.route('/admin/user/toggle_status/<int:id>', methods=['POST'])
 @login_required
+@admin_required
 def toggle_user_status(id):
+    if id == current_user.id:
+        flash('لا يمكنك إيقاف حسابك' if session.get('lang', 'ar') == 'ar' else 'You cannot suspend your own account', 'danger')
+        return redirect(url_for('manage_users'))
     user = User.query.get_or_404(id); user.is_active = not user.is_active; db.session.commit()
     return redirect(url_for('manage_users'))
 
 @app.route('/admin/user/reset_password/<int:id>', methods=['POST'])
 @login_required
+@admin_required
 def reset_password(id):
     user = User.query.get_or_404(id)
     new_pass = request.form.get('new_password')
@@ -339,22 +476,65 @@ def reset_password(id):
 
 @app.route('/admin/user/edit/<int:id>', methods=['POST'])
 @login_required
+@admin_required
 def edit_user(id):
     user = User.query.get_or_404(id)
-    user.full_name = request.form.get('full_name'); user.username = request.form.get('username'); user.email = request.form.get('email'); user.role = request.form.get('role'); user.department_id = request.form.get('department_id') or None
+    new_username = request.form.get('username', '').strip()
+    existing = User.query.filter(User.username == new_username, User.id != id).first()
+    if existing:
+        msg = 'تعذر التحديث (اسم المستخدم مستخدم)' if session.get('lang', 'ar') == 'ar' else 'Could not update (username already exists)'
+        flash(msg, 'danger')
+        return redirect(url_for('manage_users'))
+    user.full_name = request.form.get('full_name')
+    user.username = new_username
+    user.email = request.form.get('email')
+    if id != current_user.id:
+        user.role = request.form.get('role')
+    user.department_id = request.form.get('department_id') or None
     db.session.commit()
+    flash('تم تحديث بيانات الموظف بنجاح' if session.get('lang', 'ar') == 'ar' else 'User updated successfully', 'success')
     return redirect(url_for('manage_users'))
 
 @app.route('/admin/hierarchy', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def manage_hierarchy():
     if request.method == 'POST':
         db.session.add(HierarchyRule(from_role=request.form.get('from_role'), to_role=request.form.get('to_role'), cc_role=request.form.get('cc_role'))); db.session.commit()
     return render_template('manage_hierarchy.html', rules=HierarchyRule.query.all(), roles=AVAILABLE_ROLES)
 
+@app.route('/admin/hierarchy/delete/<int:id>')
+@login_required
+@admin_required
+def delete_hierarchy_rule(id):
+    rule = HierarchyRule.query.get_or_404(id)
+    db.session.delete(rule)
+    db.session.commit()
+    return redirect(url_for('manage_hierarchy'))
+
+@app.route('/admin/permissions', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def manage_permissions():
+    if request.method == 'POST':
+        for key in DEFAULT_FEATURE_VISIBILITY:
+            roles = request.form.getlist(f'feature_{key}')
+            setting = FeatureVisibility.query.filter_by(feature_key=key).first()
+            if setting:
+                setting.allowed_roles = ','.join(roles)
+            else:
+                db.session.add(FeatureVisibility(feature_key=key, allowed_roles=','.join(roles)))
+        db.session.commit()
+        flash('تم حفظ إعدادات الظهور' if session.get('lang', 'ar') == 'ar' else 'Visibility settings saved', 'success')
+        return redirect(url_for('manage_permissions'))
+    seed_feature_visibility()
+    settings = {s.feature_key: [r.strip() for r in s.allowed_roles.split(',') if r.strip()] for s in FeatureVisibility.query.all()}
+    return render_template('manage_permissions.html', settings=settings, roles=AVAILABLE_ROLES, features=FEATURE_LABELS)
+
 # --- كود الرفع المعدل والذكي للأقسام والمستخدمين ---
 @app.route('/admin/import_users', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def import_users():
     if request.method == 'POST':
         file = request.files.get('file')
@@ -410,6 +590,7 @@ def import_users():
 
 @app.route('/admin/download_template')
 @login_required
+@admin_required
 def download_template():
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output)
@@ -429,6 +610,9 @@ def download_template():
 @app.route('/tasks')
 @login_required
 def tasks():
+    if not user_can_see('tasks_list'):
+        flash('غير مصرح لك بدخول هذه الصفحة', 'danger')
+        return redirect(url_for('dashboard'))
     f = request.args.get('status')
     all_t = Task.query.filter_by(status=f).order_by(Task.created_at.desc()).all() if f else Task.query.order_by(Task.created_at.desc()).all()
     return render_template('task_list.html', tasks=all_t)
@@ -436,19 +620,40 @@ def tasks():
 @app.route('/tasks/create', methods=['GET', 'POST'])
 @login_required
 def create_task():
+    if not user_can_see('create_task'):
+        flash('غير مصرح لك بدخول هذه الصفحة', 'danger')
+        return redirect(url_for('dashboard'))
     if request.method == 'POST':
         assignee = User.query.get(request.form.get('assigned_to'))
         rule = HierarchyRule.query.filter_by(from_role=current_user.role, to_role=assignee.role).first()
         cc_user = User.query.filter_by(role=rule.cc_role, is_active=True).first() if rule and rule.cc_role else None
         new_task = Task(title=request.form.get('title'), description=request.form.get('description'), priority=request.form.get('priority'), recurrence=request.form.get('recurrence', 'None'), creator_id=current_user.id, assignee_id=assignee.id, head_id=cc_user.id if cc_user else None)
         dl = request.form.get('deadline')
-        if dl: new_task.deadline = datetime.strptime(dl, '%Y-%m-%dT%H:%M')
+        if dl:
+            try:
+                new_task.deadline = datetime.strptime(dl, '%Y-%m-%dT%H:%M')
+            except ValueError:
+                new_task.deadline = datetime.strptime(dl, '%Y-%m-%d %H:%M')
         file = request.files.get('attachment')
         if file and file.filename != '':
             fname = f"{datetime.now().strftime('%Y%m%d%H%M')}_{secure_filename(file.filename)}"
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], fname))
             new_task.attachment = fname
         db.session.add(new_task); db.session.commit()
+        create_notification(
+            assignee.id, 'new_task',
+            'مهمة جديدة' if session.get('lang', 'ar') == 'ar' else 'New Task',
+            f"{current_user.full_name}: {new_task.title}",
+            link=f'/tasks/{new_task.id}', task_id=new_task.id
+        )
+        if cc_user and cc_user.id != assignee.id:
+            create_notification(
+                cc_user.id, 'new_task',
+                'مهمة جديدة (CC)' if session.get('lang', 'ar') == 'ar' else 'New Task (CC)',
+                f"{current_user.full_name}: {new_task.title}",
+                link=f'/tasks/{new_task.id}', task_id=new_task.id
+            )
+        db.session.commit()
         try:
             recipients = [assignee.email] if assignee.email else []
             cc_list = [cc_user.email] if (cc_user and cc_user.email) else []
@@ -491,6 +696,27 @@ def task_detail(id):
                 
             db.session.add(TaskUpdate(content=cnt, is_note=bool(request.form.get('is_note')), filename=fname, task_id=t.id, user_id=current_user.id))
         db.session.commit()
+
+        if cnt or status_changed:
+            notify_ids = set()
+            if t.creator_id and t.creator_id != current_user.id:
+                notify_ids.add(t.creator_id)
+            if t.head_id and t.head_id != current_user.id:
+                notify_ids.add(t.head_id)
+            if t.assignee_id and t.assignee_id != current_user.id:
+                notify_ids.add(t.assignee_id)
+            msg_text = f"{current_user.full_name}: {t.title}"
+            if status_changed:
+                msg_text += f" → {ns}"
+            if cnt:
+                msg_text += f" — {cnt[:80]}{'...' if len(cnt) > 80 else ''}"
+            for uid in notify_ids:
+                create_notification(
+                    uid, 'task_update',
+                    'تحديث مهمة' if session.get('lang', 'ar') == 'ar' else 'Task Update',
+                    msg_text, link=f'/tasks/{t.id}', task_id=t.id
+                )
+            db.session.commit()
         
         # إرسال إيميل للمديرين عند تغيير الحالة
         if status_changed:
@@ -512,6 +738,7 @@ if __name__ == '__main__':
         db.create_all()
         try: db.session.execute(text('ALTER TABLE user ADD COLUMN department_id INTEGER REFERENCES department(id)')); db.session.commit()
         except: pass
+        seed_feature_visibility()
         
         # تحديث بيانات الأدمن تلقائياً لو موجود بدل مسح قاعدة البيانات
         admin_user = User.query.filter_by(username='admin').first()
