@@ -32,7 +32,9 @@ fi
 if [ -d "$APP_DIR/.git" ]; then
     echo "==> Updating code ($BRANCH)"
     git -C "$APP_DIR" fetch -q origin "$BRANCH"
-    git -C "$APP_DIR" checkout -q -B "$BRANCH" "origin/$BRANCH"
+    # Force: older versions tracked instance/taskmanager.db, so the live DB counts as a "local change".
+    # It is already backed up above and restored below.
+    git -C "$APP_DIR" checkout -q -f -B "$BRANCH" "origin/$BRANCH"
     git -C "$APP_DIR" reset -q --hard "origin/$BRANCH"
 else
     if [ -d "$APP_DIR" ]; then
