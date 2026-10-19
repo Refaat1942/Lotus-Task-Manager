@@ -45,7 +45,7 @@
                         <td><span class="text-info fw-bold">{{ dept.head.full_name if dept.head else '--' }}</span></td>
                         <td><span class="badge bg-secondary">{{ dept.users|length }}</span></td>
                         <td>
-                            <a href="/admin/departments/delete/{{ dept.id }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('{{ t['confirm_delete'] }}')"><i class="fas fa-trash"></i></a>
+                            <form action="/admin/departments/delete/{{ dept.id }}" method="POST" class="d-inline" onsubmit="return confirm('{{ t['confirm_delete'] }}')"><button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button></form>
                         </td>
                     </tr>
                     {% else %}

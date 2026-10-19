@@ -187,6 +187,23 @@ TRANSLATIONS = {
         'auto_cancel_help': 'If the assignee does not open the task within this time, it is automatically canceled.',
         'settings_saved': 'Settings saved successfully',
         'settings_invalid': 'Invalid value — enter a number between 1 and 1440',
+        'invalid_input': 'Please fill in all required fields correctly',
+        'file_type_not_allowed': 'This file type is not allowed',
+        'file_too_large': 'The uploaded file is too large',
+        'invalid_deadline': 'Invalid deadline date',
+        'password_too_short': 'Password must be at least 4 characters',
+        'department_exists': 'A department with this name already exists',
+        'department_added': 'Department added',
+        'department_deleted': 'Department deleted',
+        'user_added': 'User added',
+        'user_exists': 'This username is already taken',
+        'password_reset_done': 'Password reset successfully',
+        'rule_added': 'Hierarchy rule added',
+        'rule_deleted': 'Hierarchy rule deleted',
+        'import_missing_columns': 'Missing required columns',
+        'notif_recurring_task': 'New recurring task',
+        'task_search_placeholder': 'Search tasks...',
+        'my_tasks_only': 'My tasks only',
         'chat_title': 'Task Chat',
         'chat_placeholder': 'Type a message…',
         'send_message': 'Send',
@@ -405,6 +422,23 @@ TRANSLATIONS = {
         'auto_cancel_help': 'إذا لم يفتح المُكلف المهمة خلال هذا الوقت، تُلغى تلقائياً.',
         'settings_saved': 'تم حفظ الإعدادات بنجاح',
         'settings_invalid': 'قيمة غير صالحة — أدخل رقماً بين 1 و 1440',
+        'invalid_input': 'يرجى تعبئة جميع الحقول المطلوبة بشكل صحيح',
+        'file_type_not_allowed': 'نوع الملف غير مسموح به',
+        'file_too_large': 'حجم الملف المرفوع كبير جداً',
+        'invalid_deadline': 'تاريخ الموعد النهائي غير صالح',
+        'password_too_short': 'يجب ألا تقل كلمة المرور عن 4 أحرف',
+        'department_exists': 'يوجد قسم بهذا الاسم بالفعل',
+        'department_added': 'تمت إضافة القسم',
+        'department_deleted': 'تم حذف القسم',
+        'user_added': 'تمت إضافة الموظف',
+        'user_exists': 'اسم المستخدم مستخدم بالفعل',
+        'password_reset_done': 'تمت إعادة تعيين كلمة المرور بنجاح',
+        'rule_added': 'تمت إضافة القاعدة',
+        'rule_deleted': 'تم حذف القاعدة',
+        'import_missing_columns': 'أعمدة مطلوبة غير موجودة',
+        'notif_recurring_task': 'مهمة متكررة جديدة',
+        'task_search_placeholder': 'ابحث في المهام...',
+        'my_tasks_only': 'مهامي فقط',
         'chat_title': 'محادثة المهمة',
         'chat_placeholder': 'اكتب رسالة…',
         'send_message': 'إرسال',
@@ -516,6 +550,15 @@ def localized_user_name(user):
     return user.full_name or user.username
 
 
+# Set by app.py. Importing `app` from here would re-execute app.py when it runs as
+# __main__, creating a second Flask app and a second background scheduler.
+auto_cancel_minutes_provider = None
+
+
+def is_system_update(text):
+    return bool(text) and text.strip().startswith('[SYS:')
+
+
 def update_content(text):
     if not text:
         return ''
@@ -524,21 +567,25 @@ def update_content(text):
     key = SYSTEM_UPDATE_MAP.get(text)
     if key:
         if key == 'system_note_auto_cancel':
+            # Legacy note without the minutes recorded — fall back to the current setting.
             minutes = 10
-            try:
-                from app import get_auto_cancel_minutes
-                minutes = get_auto_cancel_minutes()
-            except Exception:
-                pass
+            if auto_cancel_minutes_provider:
+                try:
+                    minutes = auto_cancel_minutes_provider()
+                except Exception:
+                    pass
             return bundle.get(key, text).format(minutes=minutes)
         return bundle.get(key, text)
+    if text.startswith('[SYS:auto_cancel:'):
+        minutes = text.replace('[SYS:auto_cancel:', '').rstrip(']')
+        return bundle.get('system_note_auto_cancel', text).format(minutes=minutes)
     if text.startswith('[SYS:status_change:'):
         st = text.replace('[SYS:status_change:', '').rstrip(']')
         return bundle.get('system_note_status_change', text).format(status=status_label(st))
-    if '[إجراء تلقائي]' in text or ('إغلاق' in text and '10 دقائق' in text):
-        return bundle.get('system_note_auto_close', text)
     if '[إجراء تلقائي]' in text and ('Deadline' in text or 'الموعد' in text):
         return bundle.get('system_note_overdue_close', bundle.get('system_note_deadline', text))
+    if '[إجراء تلقائي]' in text or ('إغلاق' in text and '10 دقائق' in text):
+        return bundle.get('system_note_auto_close', text)
     return text
 
 

@@ -7,14 +7,26 @@
     {% endif %}
 </div>
 
+{% set cur = request.args.get('status') %}
+{% set extra = ('&mine=1' if request.args.get('mine') else '') ~ ('&q=' ~ (request.args.get('q')|urlencode) if request.args.get('q') else '') %}
 <div class="card mb-4 border-0 shadow-sm">
     <div class="card-body p-2">
         <ul class="nav nav-pills nav-fill flex-wrap">
-            <li class="nav-item"><a class="nav-link {{ 'active' if not request.args.get('status') else '' }}" href="/tasks">{{ t['filter_all'] }}</a></li>
-            <li class="nav-item"><a class="nav-link {{ 'active' if request.args.get('status') == 'In Progress' else '' }}" href="/tasks?status=In Progress"><i class="fas fa-spinner me-1"></i>{{ t['filter_progress'] }}</a></li>
-            <li class="nav-item"><a class="nav-link {{ 'active' if request.args.get('status') == 'Completed' else '' }}" href="/tasks?status=Completed"><i class="fas fa-check me-1"></i>{{ t['filter_completed'] }}</a></li>
-            <li class="nav-item"><a class="nav-link {{ 'active' if request.args.get('status') == 'Canceled' else '' }}" href="/tasks?status=Canceled"><i class="fas fa-ban me-1"></i>{{ t['filter_canceled'] }}</a></li>
+            <li class="nav-item"><a class="nav-link {{ 'active' if not cur else '' }}" href="/tasks?status={{ extra }}">{{ t['filter_all'] }}</a></li>
+            <li class="nav-item"><a class="nav-link {{ 'active' if cur == 'In Progress' else '' }}" href="/tasks?status=In%20Progress{{ extra }}"><i class="fas fa-spinner me-1"></i>{{ t['filter_progress'] }}</a></li>
+            <li class="nav-item"><a class="nav-link {{ 'active' if cur == 'Overdue' else '' }}" href="/tasks?status=Overdue{{ extra }}"><i class="fas fa-exclamation-triangle me-1"></i>{{ t['overdue'] }}</a></li>
+            <li class="nav-item"><a class="nav-link {{ 'active' if cur == 'Completed' else '' }}" href="/tasks?status=Completed{{ extra }}"><i class="fas fa-check me-1"></i>{{ t['filter_completed'] }}</a></li>
+            <li class="nav-item"><a class="nav-link {{ 'active' if cur == 'Canceled' else '' }}" href="/tasks?status=Canceled{{ extra }}"><i class="fas fa-ban me-1"></i>{{ t['filter_canceled'] }}</a></li>
         </ul>
+        <form method="GET" action="/tasks" class="d-flex flex-wrap gap-2 align-items-center mt-2 px-1">
+            {% if cur %}<input type="hidden" name="status" value="{{ cur }}">{% endif %}
+            <input type="search" name="q" value="{{ request.args.get('q', '') }}" class="form-control form-control-sm" style="max-width: 320px;" placeholder="{{ t['task_search_placeholder'] }}">
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="mine" value="1" id="mineOnly" {{ 'checked' if request.args.get('mine') else '' }} onchange="this.form.submit()">
+                <label class="form-check-label small" for="mineOnly">{{ t['my_tasks_only'] }}</label>
+            </div>
+            <button type="submit" class="btn btn-sm btn-outline-primary"><i class="fas fa-search"></i></button>
+        </form>
     </div>
 </div>
 

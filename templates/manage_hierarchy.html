@@ -51,7 +51,7 @@
                         <td class="fw-bold">{{ rule.to_role }}</td>
                         <td><span class="badge bg-info text-dark">{{ rule.cc_role if rule.cc_role else '--' }}</span></td>
                         <td>
-                            <a href="/admin/hierarchy/delete/{{ rule.id }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('{{ t['confirm_delete'] }}')"><i class="fas fa-trash"></i></a>
+                            <form action="/admin/hierarchy/delete/{{ rule.id }}" method="POST" class="d-inline" onsubmit="return confirm('{{ t['confirm_delete'] }}')"><button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button></form>
                         </td>
                     </tr>
                     {% endfor %}

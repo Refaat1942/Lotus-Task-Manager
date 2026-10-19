@@ -63,7 +63,7 @@
             </div>
             <div class="card-body bg-light card-scroll" id="taskChatThread">
                 {% for update in chat_updates %}
-                {% set is_system = update.content.startswith('[SYS:') %}
+                {% set is_system = is_system_update(update.content) %}
                 {% if is_system %}
                 <div class="text-center mb-3">
                     <span class="badge bg-secondary bg-opacity-75 fw-normal px-3 py-2" style="white-space: pre-wrap; max-width: 90%; line-height: 1.5;">
@@ -74,13 +74,13 @@
                 {% else %}
                 <div class="d-flex mb-3 {% if update.user_id == current_user.id %}flex-row-reverse{% endif %}">
                     <div class="flex-shrink-0 {% if update.user_id == current_user.id %}ms-2{% else %}me-2{% endif %}">
-                        <img src="https://ui-avatars.com/api/?name={{ update.user.full_name }}&background=random" class="rounded-circle shadow-sm" width="40" height="40" alt="">
+                        <img src="https://ui-avatars.com/api/?name={{ (update.user.full_name if update.user else '?')|urlencode }}&background=random" class="rounded-circle shadow-sm" width="40" height="40" alt="">
                     </div>
                     <div class="flex-grow-1" style="max-width: 75%;">
                         <div class="p-3 rounded-3 shadow-sm {% if update.user_id == current_user.id %}bg-primary text-white{% else %}bg-white{% endif %} {% if update.is_note %}border border-info border-2{% endif %}">
                             <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
                                 <strong class="small {% if update.user_id != current_user.id %}text-primary{% endif %}">
-                                    {{ update.user.full_name }}
+                                    {{ update.user.full_name if update.user else '--' }}
                                     {% if update.is_note %}<span class="badge bg-info ms-1">{{ t['admin_note'] }}</span>{% endif %}
                                 </strong>
                                 <small class="opacity-75 text-nowrap">{{ update.created_at.strftime('%I:%M %p') }}</small>

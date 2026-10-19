@@ -1,6 +1,12 @@
+import calendar
+import csv
 import io
+import logging
 import os
+import secrets
+import uuid
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, make_response, abort
 from flask_sqlalchemy import SQLAlchemy
@@ -12,23 +18,59 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import xlsxwriter
 import pandas as pd
 from sqlalchemy import text
-from i18n import TRANSLATIONS, t as tr, flash_t, status_label, priority_label, localized_user_name, update_content, normalize_status
+import i18n
+from i18n import TRANSLATIONS, t as tr, flash_t, status_label, priority_label, localized_user_name, update_content, normalize_status, is_system_update
 
 APP_VERSION = '2.5.0'
 APP_NAME = 'Lotus Task Manager'
 APP_PORT = 5000
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key_here'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///taskmanager.db'
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ALLOWED_EXTENSIONS = {
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'txt',
+    'png', 'jpg', 'jpeg', 'gif', 'webp', 'zip', 'rar', '7z', 'msg', 'eml',
+}
+MIN_PASSWORD_LENGTH = 4
 
-# إعدادات البريد
-app.config['MAIL_SERVER'] = 'smtp.office365.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'your-email@yourdomain.com'
-app.config['MAIL_PASSWORD'] = 'your-secret-password'
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+log = logging.getLogger('lotus')
+
+app = Flask(__name__)
+
+
+def _load_secret_key():
+    # Prefer the environment; otherwise keep a random key in instance/ so sessions survive restarts.
+    key = os.environ.get('SECRET_KEY')
+    if key:
+        return key
+    os.makedirs(app.instance_path, exist_ok=True)
+    key_file = os.path.join(app.instance_path, 'secret_key')
+    if os.path.exists(key_file):
+        with open(key_file) as fh:
+            key = fh.read().strip()
+        if key:
+            return key
+    key = secrets.token_hex(32)
+    with open(key_file, 'w') as fh:
+        fh.write(key)
+    return key
+
+
+app.config['SECRET_KEY'] = _load_secret_key()
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///taskmanager.db')
+app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'static', 'uploads')
+app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_UPLOAD_MB', '25')) * 1024 * 1024
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=12)
+
+# إعدادات البريد (من متغيرات البيئة)
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.office365.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', '587'))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', '1') == '1'
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
+app.config['MAIL_TIMEOUT'] = 10
 mail = Mail(app)
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -175,13 +217,18 @@ def get_auto_cancel_minutes():
     except ValueError:
         return 10
 
+i18n.auto_cancel_minutes_provider = get_auto_cancel_minutes
+
 def seed_app_settings():
     if not AppSetting.query.filter_by(key='auto_cancel_minutes').first():
         db.session.add(AppSetting(key='auto_cancel_minutes', value='10'))
     db.session.commit()
 
 @login_manager.user_loader
-def load_user(user_id): return User.query.get(int(user_id))
+def load_user(user_id):
+    user = db.session.get(User, int(user_id))
+    # Suspended users are logged out on their next request.
+    return user if user and user.is_active else None
 
 def admin_required(f):
     @wraps(f)
@@ -210,6 +257,64 @@ def create_notification(user_id, ntype, title, message, link=None, task_id=None)
         message=message, link=link, task_id=task_id
     ))
 
+def mail_enabled():
+    return bool(app.config.get('MAIL_USERNAME') and app.config.get('MAIL_PASSWORD'))
+
+def send_email(subject, recipients, body, cc=None):
+    recipients = [r for r in (recipients or []) if r]
+    if not recipients or not mail_enabled():
+        return
+    try:
+        msg = Message(subject, sender=app.config['MAIL_USERNAME'], recipients=recipients, cc=[c for c in (cc or []) if c])
+        msg.body = body
+        mail.send(msg)
+    except Exception:
+        log.exception('Failed to send email: %s', subject)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def save_upload(file, prefix=''):
+    """Save an uploaded file. Returns the stored name, None if no file, or False if rejected."""
+    if not file or not file.filename:
+        return None
+    safe = secure_filename(file.filename)
+    if not safe or not allowed_file(safe):
+        return False
+    fname = f"{prefix}{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}_{safe}"
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], fname))
+    return fname
+
+def add_months(dt, months):
+    month = dt.month - 1 + months
+    year = dt.year + month // 12
+    month = month % 12 + 1
+    day = min(dt.day, calendar.monthrange(year, month)[1])
+    return dt.replace(year=year, month=month, day=day)
+
+def next_recurrence(dt, recurrence):
+    if recurrence == 'Daily':
+        return dt + timedelta(days=1)
+    if recurrence == 'Weekly':
+        return dt + timedelta(days=7)
+    if recurrence == 'Monthly':
+        return add_months(dt, 1)
+    return None
+
+def is_safe_redirect(target):
+    if not target:
+        return False
+    parsed = urlparse(target)
+    return not parsed.scheme and not parsed.netloc and target.startswith('/')
+
+def back(default_endpoint='dashboard'):
+    ref = request.referrer
+    if ref:
+        parsed = urlparse(ref)
+        if parsed.netloc == request.host:
+            return redirect(ref)
+    return redirect(url_for(default_endpoint))
+
 def seed_feature_visibility():
     for key, roles in DEFAULT_FEATURE_VISIBILITY.items():
         if not FeatureVisibility.query.filter_by(feature_key=key).first():
@@ -226,93 +331,111 @@ def inject_translations():
         lang=lang, t=tr_dict, user_can_see=user_can_see, display_name=display_name,
         app_version=APP_VERSION, app_name=APP_NAME,
         status_label=status_label, priority_label=priority_label, update_content=update_content,
+        is_system_update=is_system_update,
     )
 
 @app.route('/set_language/<lang_code>')
 def set_language(lang_code):
-    session['lang'] = lang_code
-    return redirect(request.referrer or url_for('dashboard'))
+    if lang_code in TRANSLATIONS:
+        session['lang'] = lang_code
+    return back()
+
+@app.errorhandler(413)
+def file_too_large(_e):
+    flash_t('file_too_large', 'danger')
+    return back()
 
 # --- الجدولة التلقائية الدقيقة (كل دقيقة) ---
 def automated_system_checks():
     with app.app_context():
-        now = datetime.now()
-        
-        minutes = get_auto_cancel_minutes()
-        cutoff = now - timedelta(minutes=minutes)
-        neglected_tasks = Task.query.filter(
-            Task.opened_at.is_(None),
-            Task.status.in_(ACTIVE_STATUSES),
-            Task.created_at <= cutoff
-        ).all()
-        for task in neglected_tasks:
-            task.status = 'Canceled'
-            task.completed_at = now
-            db.session.add(TaskUpdate(content="[SYS:auto_cancel]", is_note=True, task_id=task.id, user_id=task.creator_id))
-            if task.creator_id:
-                create_notification(
-                    task.creator_id, 'task_update',
-                    f"{TRANSLATIONS['ar']['notif_auto_closed']} / {TRANSLATIONS['en']['notif_auto_closed']}",
-                    TRANSLATIONS['en']['system_note_auto_cancel'].format(minutes=minutes),
-                    link=f'/tasks/{task.id}', task_id=task.id
-                )
-            try:
-                recipients = [task.creator.email] if task.creator.email else []
-                cc_list = [task.head.email] if (task.head and task.head.email) else []
-                if recipients:
-                    msg = Message(f"Urgent: Auto-closed task #{task.id}", sender=app.config['MAIL_USERNAME'], recipients=recipients, cc=cc_list)
-                    msg.body = TRANSLATIONS['en']['system_note_auto_cancel'].format(minutes=minutes) + f"\nTask: {task.title}\nAssignee: {task.assignee.full_name if task.assignee else '--'}"
-                    mail.send(msg)
-            except: pass
+        try:
+            _run_system_checks()
+        except Exception:
+            db.session.rollback()
+            log.exception('Automated system checks failed')
 
-        # 2. Deadline alerts (notify only — status stays In Progress)
-        overdue_tasks = Task.query.filter(
-            Task.deadline < now,
-            Task.status.in_(ACTIVE_STATUSES + ['In Progress'])
-        ).all()
-        for task in overdue_tasks:
-            if normalize_status(task.status) in ['Completed', 'Canceled']:
-                continue
-            if TaskUpdate.query.filter_by(task_id=task.id, content='[SYS:deadline_notified]').first():
-                continue
-            db.session.add(TaskUpdate(content="[SYS:deadline_notified]", is_note=True, task_id=task.id, user_id=task.creator_id))
-            if task.creator_id:
-                create_notification(
-                    task.creator_id, 'deadline_passed',
-                    f"{TRANSLATIONS['ar']['deadline_passed']} / {TRANSLATIONS['en']['deadline_passed']}",
-                    f"'{task.title}' — {TRANSLATIONS['en']['deadline_passed_msg']}",
-                    link=f'/tasks/{task.id}', task_id=task.id
-                )
-            if task.head_id and task.head_id != task.creator_id:
-                create_notification(
-                    task.head_id, 'deadline_passed',
-                    f"{TRANSLATIONS['ar']['deadline_passed']} / {TRANSLATIONS['en']['deadline_passed']}",
-                    f"'{task.title}' — {TRANSLATIONS['en']['deadline_passed_msg']}",
-                    link=f'/tasks/{task.id}', task_id=task.id
-                )
-            try:
-                if task.creator and task.creator.email:
-                    cc_list = [task.head.email] if (task.head and task.head.email) else []
-                    msg = Message(f"Alert: Task deadline passed #{task.id}", sender=app.config['MAIL_USERNAME'], recipients=[task.creator.email], cc=cc_list)
-                    msg.body = TRANSLATIONS['en']['deadline_passed_msg'] + f"\nTask: {task.title}"
-                    mail.send(msg)
-            except: pass
-        
-        # 3. المهام المتكررة
-        recurring = Task.query.filter(Task.recurrence != 'None', Task.next_run <= now).all()
-        for rt in recurring:
-            new_t = Task(title=rt.title, description=rt.description, priority=rt.priority, recurrence=rt.recurrence, creator_id=rt.creator_id, assignee_id=rt.assignee_id, head_id=rt.head_id, status='In Progress')
-            if rt.recurrence == 'Daily': rt.next_run = now + timedelta(days=1)
-            elif rt.recurrence == 'Weekly': rt.next_run = now + timedelta(days=7)
-            elif rt.recurrence == 'Monthly': rt.next_run = now + timedelta(days=30)
-            new_t.deadline = rt.next_run
-            db.session.add(new_t)
-            
-        db.session.commit()
+def _run_system_checks():
+    now = datetime.now()
+
+    # 1. Cancel tasks the assignee never opened
+    minutes = get_auto_cancel_minutes()
+    cutoff = now - timedelta(minutes=minutes)
+    neglected_tasks = Task.query.filter(
+        Task.opened_at.is_(None),
+        Task.status.in_(ACTIVE_STATUSES),
+        Task.created_at <= cutoff
+    ).all()
+    emails = []
+    for task in neglected_tasks:
+        task.status = 'Canceled'
+        task.completed_at = now
+        db.session.add(TaskUpdate(content=f"[SYS:auto_cancel:{minutes}]", is_note=True, task_id=task.id, user_id=task.creator_id))
+        note = TRANSLATIONS['en']['system_note_auto_cancel'].format(minutes=minutes)
+        if task.creator_id:
+            create_notification(
+                task.creator_id, 'task_update',
+                f"{TRANSLATIONS['ar']['notif_auto_closed']} / {TRANSLATIONS['en']['notif_auto_closed']}",
+                f"'{task.title}' — {note}",
+                link=f'/tasks/{task.id}', task_id=task.id
+            )
+        if task.creator and task.creator.email:
+            emails.append((
+                f"Urgent: Auto-closed task #{task.id}", [task.creator.email],
+                note + f"\nTask: {task.title}\nAssignee: {task.assignee.full_name if task.assignee else '--'}",
+                [task.head.email] if (task.head and task.head.email) else [],
+            ))
+
+    # 2. Deadline alerts (notify only — status stays In Progress)
+    overdue_tasks = Task.query.filter(
+        Task.deadline < now,
+        Task.status.in_(ACTIVE_STATUSES)
+    ).all()
+    for task in overdue_tasks:
+        if TaskUpdate.query.filter_by(task_id=task.id, content='[SYS:deadline_notified]').first():
+            continue
+        db.session.add(TaskUpdate(content="[SYS:deadline_notified]", is_note=True, task_id=task.id, user_id=task.creator_id))
+        title = f"{TRANSLATIONS['ar']['deadline_passed']} / {TRANSLATIONS['en']['deadline_passed']}"
+        message = f"'{task.title}' — {TRANSLATIONS['en']['deadline_passed_msg']}"
+        for uid in {task.creator_id, task.head_id, task.assignee_id} - {None}:
+            create_notification(uid, 'deadline_passed', title, message, link=f'/tasks/{task.id}', task_id=task.id)
+        if task.creator and task.creator.email:
+            emails.append((
+                f"Alert: Task deadline passed #{task.id}", [task.creator.email],
+                TRANSLATIONS['en']['deadline_passed_msg'] + f"\nTask: {task.title}",
+                [task.head.email] if (task.head and task.head.email) else [],
+            ))
+
+    # 3. المهام المتكررة
+    recurring = Task.query.filter(Task.recurrence.in_(['Daily', 'Weekly', 'Monthly']), Task.next_run <= now).all()
+    for rt in recurring:
+        run_at = rt.next_run
+        # Catch up past missed runs without spawning a copy for each one.
+        while run_at and run_at <= now:
+            run_at = next_recurrence(run_at, rt.recurrence)
+        rt.next_run = run_at
+        # The copy is a one-off task; only the original keeps the schedule.
+        new_t = Task(title=rt.title, description=rt.description, priority=rt.priority, recurrence='None',
+                     creator_id=rt.creator_id, assignee_id=rt.assignee_id, head_id=rt.head_id,
+                     status='In Progress', deadline=run_at, attachment=rt.attachment)
+        db.session.add(new_t)
+        db.session.flush()
+        if new_t.assignee_id:
+            create_notification(
+                new_t.assignee_id, 'new_task',
+                f"{TRANSLATIONS['ar']['notif_recurring_task']} / {TRANSLATIONS['en']['notif_recurring_task']}",
+                new_t.title, link=f'/tasks/{new_t.id}', task_id=new_t.id
+            )
+
+    db.session.commit()
+
+    # Send mail after commit so a slow/failed SMTP server never blocks DB changes.
+    for subject, recipients, body, cc in emails:
+        send_email(subject, recipients, body, cc)
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(func=automated_system_checks, trigger="interval", minutes=1)
-scheduler.start()
+scheduler.add_job(func=automated_system_checks, trigger="interval", minutes=1, max_instances=1, coalesce=True)
+if os.environ.get('LOTUS_DISABLE_SCHEDULER') != '1':
+    scheduler.start()
 
 # --- مسارات النظام الأساسية ---
 @app.route('/')
@@ -322,13 +445,17 @@ def index(): return redirect(url_for('login'))
 def login():
     if current_user.is_authenticated: return redirect(url_for('dashboard'))
     if request.method == 'POST':
-        user = User.query.filter_by(username=request.form.get('username')).first()
-        if user and check_password_hash(user.password, request.form.get('password')):
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+        user = User.query.filter_by(username=username).first() if username else None
+        if user and user.password and check_password_hash(user.password, password):
             if not user.is_active:
                 flash_t('account_suspended', 'danger')
                 return redirect(url_for('login'))
+            session.permanent = True
             login_user(user)
-            return redirect(url_for('dashboard'))
+            next_url = request.args.get('next')
+            return redirect(next_url if is_safe_redirect(next_url) else url_for('dashboard'))
         flash_t('invalid_login', 'danger')
     return render_template('login.html')
 
@@ -340,17 +467,19 @@ def logout():
 @app.route('/change_my_password', methods=['POST'])
 @login_required
 def change_my_password():
-    current_password = request.form.get('current_password')
-    new_password = request.form.get('new_password')
-    
-    if check_password_hash(current_user.password, current_password):
+    current_password = request.form.get('current_password') or ''
+    new_password = request.form.get('new_password') or ''
+
+    if not check_password_hash(current_user.password, current_password):
+        flash_t('wrong_password', 'danger')
+    elif len(new_password) < MIN_PASSWORD_LENGTH:
+        flash_t('password_too_short', 'danger')
+    else:
         current_user.password = generate_password_hash(new_password)
         db.session.commit()
         flash_t('password_changed', 'success')
-    else:
-        flash_t('wrong_password', 'danger')
-            
-    return redirect(request.referrer or url_for('dashboard'))
+
+    return back()
 
 @app.route('/dashboard')
 @login_required
@@ -360,11 +489,14 @@ def dashboard():
     stats = {
         'total_tasks': Task.query.count(),
         'in_progress': Task.query.filter(Task.status.in_(ACTIVE_STATUSES)).count(),
-        'overdue': len([task for task in Task.query.all() if task.is_overdue]),
-        'completed': Task.query.filter(Task.status.in_(['Completed'])).count(),
+        'overdue': overdue_query().count(),
+        'completed': Task.query.filter(Task.status == 'Completed').count(),
     }
     recent = Task.query.order_by(Task.created_at.desc()).limit(5).all()
     return render_template('dashboard.html', stats=stats, recent_tasks=recent, today_date=datetime.now().strftime('%Y-%m-%d'))
+
+def overdue_query():
+    return Task.query.filter(Task.deadline.isnot(None), Task.deadline < datetime.now(), Task.status.in_(ACTIVE_STATUSES))
 
 # --- الإشعارات الحية ---
 @app.route('/api/notifications')
@@ -418,24 +550,39 @@ def reports():
 def export_excel(type):
     if not user_can_see('reports'):
         abort(403)
+    if type not in ('users', 'tasks', 'tasks_overdue'):
+        abort(404)
+
+    def cell(value):
+        # Block spreadsheet formula injection from user-entered text.
+        if isinstance(value, str) and value[:1] in ('=', '+', '-', '@'):
+            return "'" + value
+        return '' if value is None else value
+
+    def fmt(dt):
+        return dt.strftime('%Y-%m-%d %H:%M') if dt else ''
+
     output = io.StringIO()
-    import csv
     writer = csv.writer(output)
     if type == 'users':
-        writer.writerow(['ID', 'Full Name', 'Email', 'Role', 'Department'])
-        for u in User.query.all(): 
+        writer.writerow(['ID', 'Full Name', 'Username', 'Email', 'Role', 'Department', 'Active'])
+        for u in User.query.order_by(User.full_name).all():
             dept_name = u.department.name if u.department else ''
-            writer.writerow([u.id, u.full_name, u.email, u.role, dept_name])
+            writer.writerow([cell(v) for v in (u.id, u.full_name, u.username, u.email, u.role, dept_name, 'Yes' if u.is_active else 'No')])
     else:
-        writer.writerow(['ID', 'Title', 'Assignee', 'Status', 'Started', 'Completed', 'Duration (Hrs)', 'Deadline'])
-        data = [t for t in Task.query.all() if t.is_overdue] if type == 'tasks_overdue' else Task.query.all()
-        for t in data:
+        writer.writerow(['ID', 'Title', 'Creator', 'Assignee', 'Status', 'Priority', 'Created', 'Started', 'Completed', 'Duration (Hrs)', 'Deadline', 'Overdue'])
+        query = overdue_query() if type == 'tasks_overdue' else Task.query
+        for t in query.order_by(Task.created_at.desc()).all():
             duration = round((t.completed_at - t.started_at).total_seconds() / 3600, 2) if (t.started_at and t.completed_at) else "N/A"
-            writer.writerow([t.id, t.title, t.assignee.full_name, t.status, t.started_at, t.completed_at, duration, t.deadline])
-    
+            writer.writerow([cell(v) for v in (
+                t.id, t.title, t.creator.full_name if t.creator else '', t.assignee.full_name if t.assignee else '',
+                t.display_status, t.priority, fmt(t.created_at), fmt(t.started_at), fmt(t.completed_at),
+                duration, fmt(t.deadline), 'Yes' if t.is_overdue else 'No',
+            )])
+
     response = make_response(output.getvalue().encode('utf-8-sig'))
-    response.headers["Content-Disposition"] = f"attachment; filename={type}.csv"
-    response.headers["Content-type"] = "text/csv; charset=utf-8-sig"
+    response.headers["Content-Disposition"] = f"attachment; filename={type}_{datetime.now().strftime('%Y%m%d')}.csv"
+    response.headers["Content-type"] = "text/csv; charset=utf-8"
     return response
 
 # --- إدارة الأقسام ---
@@ -451,15 +598,19 @@ def manage_departments():
 @login_required
 @admin_required
 def add_department():
-    name = request.form.get('name')
-    head_id = request.form.get('head_id')
-    if name and not Department.query.filter_by(name=name).first():
-        dept = Department(name=name, head_id=head_id if head_id else None)
-        db.session.add(dept)
+    name = (request.form.get('name') or '').strip()
+    head_id = request.form.get('head_id', type=int)
+    if not name:
+        flash_t('invalid_input', 'danger')
+    elif Department.query.filter_by(name=name).first():
+        flash_t('department_exists', 'danger')
+    else:
+        db.session.add(Department(name=name, head_id=head_id or None))
         db.session.commit()
+        flash_t('department_added', 'success')
     return redirect(url_for('manage_departments'))
 
-@app.route('/admin/departments/delete/<int:id>')
+@app.route('/admin/departments/delete/<int:id>', methods=['POST'])
 @login_required
 @admin_required
 def delete_department(id):
@@ -467,6 +618,7 @@ def delete_department(id):
     for u in dept.users: u.department_id = None
     db.session.delete(dept)
     db.session.commit()
+    flash_t('department_deleted', 'success')
     return redirect(url_for('manage_departments'))
 
 # --- إدارة الموظفين ---
@@ -479,10 +631,22 @@ def manage_users(): return render_template('manage_users.html', users=User.query
 @login_required
 @admin_required
 def add_user():
-    username = request.form.get('username')
-    if not User.query.filter_by(username=username).first():
-        new_u = User(full_name=request.form.get('full_name'), username=username, email=request.form.get('email'), password=generate_password_hash(request.form.get('password')), role=request.form.get('role'), department_id=request.form.get('department_id') or None)
+    username = (request.form.get('username') or '').strip()
+    full_name = (request.form.get('full_name') or '').strip()
+    password = request.form.get('password') or ''
+    role = request.form.get('role')
+    if not username or not full_name or role not in AVAILABLE_ROLES:
+        flash_t('invalid_input', 'danger')
+    elif len(password) < MIN_PASSWORD_LENGTH:
+        flash_t('password_too_short', 'danger')
+    elif User.query.filter_by(username=username).first():
+        flash_t('user_exists', 'danger')
+    else:
+        new_u = User(full_name=full_name, username=username, email=(request.form.get('email') or '').strip() or None,
+                     password=generate_password_hash(password), role=role,
+                     department_id=request.form.get('department_id', type=int) or None)
         db.session.add(new_u); db.session.commit()
+        flash_t('user_added', 'success')
     return redirect(url_for('manage_users'))
 
 @app.route('/admin/user/toggle_status/<int:id>', methods=['POST'])
@@ -500,8 +664,12 @@ def toggle_user_status(id):
 @admin_required
 def reset_password(id):
     user = User.query.get_or_404(id)
-    new_pass = request.form.get('new_password')
-    if new_pass: user.password = generate_password_hash(new_pass); db.session.commit()
+    new_pass = request.form.get('new_password') or ''
+    if len(new_pass) < MIN_PASSWORD_LENGTH:
+        flash_t('password_too_short', 'danger')
+    else:
+        user.password = generate_password_hash(new_pass); db.session.commit()
+        flash_t('password_reset_done', 'success')
     return redirect(url_for('manage_users'))
 
 @app.route('/admin/user/edit/<int:id>', methods=['POST'])
@@ -510,16 +678,21 @@ def reset_password(id):
 def edit_user(id):
     user = User.query.get_or_404(id)
     new_username = request.form.get('username', '').strip()
+    full_name = (request.form.get('full_name') or '').strip()
+    role = request.form.get('role')
+    if not new_username or not full_name:
+        flash_t('invalid_input', 'danger')
+        return redirect(url_for('manage_users'))
     existing = User.query.filter(User.username == new_username, User.id != id).first()
     if existing:
         flash_t('user_update_error', 'danger')
         return redirect(url_for('manage_users'))
-    user.full_name = request.form.get('full_name')
+    user.full_name = full_name
     user.username = new_username
-    user.email = request.form.get('email')
-    if id != current_user.id:
-        user.role = request.form.get('role')
-    user.department_id = request.form.get('department_id') or None
+    user.email = (request.form.get('email') or '').strip() or None
+    if id != current_user.id and role in AVAILABLE_ROLES:
+        user.role = role
+    user.department_id = request.form.get('department_id', type=int) or None
     db.session.commit()
     flash_t('user_updated', 'success')
     return redirect(url_for('manage_users'))
@@ -529,16 +702,24 @@ def edit_user(id):
 @admin_required
 def manage_hierarchy():
     if request.method == 'POST':
-        db.session.add(HierarchyRule(from_role=request.form.get('from_role'), to_role=request.form.get('to_role'), cc_role=request.form.get('cc_role'))); db.session.commit()
+        from_role, to_role = request.form.get('from_role'), request.form.get('to_role')
+        cc_role = request.form.get('cc_role') or None
+        if from_role not in AVAILABLE_ROLES or to_role not in AVAILABLE_ROLES or (cc_role and cc_role not in AVAILABLE_ROLES):
+            flash_t('invalid_input', 'danger')
+        else:
+            db.session.add(HierarchyRule(from_role=from_role, to_role=to_role, cc_role=cc_role)); db.session.commit()
+            flash_t('rule_added', 'success')
+        return redirect(url_for('manage_hierarchy'))
     return render_template('manage_hierarchy.html', rules=HierarchyRule.query.order_by(HierarchyRule.from_role, HierarchyRule.to_role).all(), roles=AVAILABLE_ROLES)
 
-@app.route('/admin/hierarchy/delete/<int:id>')
+@app.route('/admin/hierarchy/delete/<int:id>', methods=['POST'])
 @login_required
 @admin_required
 def delete_hierarchy_rule(id):
     rule = HierarchyRule.query.get_or_404(id)
     db.session.delete(rule)
     db.session.commit()
+    flash_t('rule_deleted', 'success')
     return redirect(url_for('manage_hierarchy'))
 
 @app.route('/admin/permissions', methods=['GET', 'POST'])
@@ -547,7 +728,7 @@ def delete_hierarchy_rule(id):
 def manage_permissions():
     if request.method == 'POST':
         for key in DEFAULT_FEATURE_VISIBILITY:
-            roles = request.form.getlist(f'feature_{key}')
+            roles = [r for r in request.form.getlist(f'feature_{key}') if r in AVAILABLE_ROLES]
             setting = FeatureVisibility.query.filter_by(feature_key=key).first()
             if setting:
                 setting.allowed_roles = ','.join(roles)
@@ -583,22 +764,35 @@ def manage_settings():
 def import_users():
     if request.method == 'POST':
         file = request.files.get('file')
-        if file and file.filename.endswith('.xlsx'):
+        if file and file.filename.lower().endswith('.xlsx'):
             try:
-                df = pd.read_excel(file)
+                df = pd.read_excel(file, dtype=str)
                 # تنظيف أسماء الأعمدة
-                df.columns = df.columns.str.strip()
-                
+                df.columns = df.columns.astype(str).str.strip().str.lower()
+                missing = [c for c in ('full_name', 'username', 'password', 'role') if c not in df.columns]
+                if missing:
+                    flash(f"{tr('import_missing_columns')}: {', '.join(missing)}", 'danger')
+                    return render_template('import_users.html')
+
+                def val(row, col):
+                    v = row.get(col)
+                    return str(v).strip() if pd.notna(v) else ''
+
+                skipped = 0
                 for index, row in df.iterrows():
-                    if pd.notna(row['username']):
-                        username = str(row['username']).strip()
+                    username = val(row, 'username')
+                    if username:
+                        role = val(row, 'role')
+                        if role not in AVAILABLE_ROLES:
+                            skipped += 1
+                            continue
                         
                         # التأكد إن اليوزر مش موجود قبل كده
                         user = User.query.filter_by(username=username).first()
                         
                         dept_id = None
-                        if 'department' in df.columns and pd.notna(row['department']):
-                            dept_name = str(row['department']).strip()
+                        dept_name = val(row, 'department')
+                        if dept_name:
                             # ابحث عن القسم، ولو مش موجود انشئه فوراً
                             dept_obj = Department.query.filter_by(name=dept_name).first()
                             if not dept_obj:
@@ -607,28 +801,40 @@ def import_users():
                                 db.session.flush() # للحصول على الـ ID قبل الـ commit النهائي
                             dept_id = dept_obj.id
                         
+                        email = val(row, 'email') or None
                         if not user:
+                            password = val(row, 'password')
+                            if len(password) < MIN_PASSWORD_LENGTH:
+                                skipped += 1
+                                continue
                             # إضافة مستخدم جديد
                             new_u = User(
-                                full_name=str(row['full_name']).strip(),
+                                full_name=val(row, 'full_name') or username,
                                 username=username,
-                                password=generate_password_hash(str(row['password']).strip()),
-                                role=str(row['role']).strip(),
+                                email=email,
+                                password=generate_password_hash(password),
+                                role=role,
                                 department_id=dept_id
                             )
                             db.session.add(new_u)
                         else:
                             # تحديث بيانات المستخدم الحالي لو اترفع تاني
-                            user.full_name = str(row['full_name']).strip()
+                            user.full_name = val(row, 'full_name') or user.full_name
                             user.department_id = dept_id
-                            user.role = str(row['role']).strip()
+                            user.role = role
+                            if email:
+                                user.email = email
 
                 db.session.commit()
                 flash_t('import_success', 'success')
+                if skipped:
+                    flash(f"{tr('invalid_input')} ({skipped})", 'warning')
                 return redirect(url_for('manage_users'))
             except Exception as e:
                 db.session.rollback()
                 flash(f"{tr('import_fail')}: {str(e)}", 'danger')
+        else:
+            flash_t('file_type_not_allowed', 'danger')
     return render_template('import_users.html')
 
 @app.route('/admin/download_template')
@@ -638,7 +844,7 @@ def download_template():
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output)
     worksheet = workbook.add_worksheet("Users Template")
-    headers = ['full_name', 'username', 'password', 'role', 'department']
+    headers = ['full_name', 'username', 'password', 'role', 'department', 'email']
     for col_num, header in enumerate(headers): worksheet.write(0, col_num, header)
     worksheet.data_validation(1, 3, 500, 3, {'validate': 'list', 'source': AVAILABLE_ROLES, 'input_title': 'اختر الوظيفة', 'input_message': 'اختر من القائمة', 'error_title': 'خطأ', 'error_message': 'الوظيفة غير معتمدة'})
     departments = [d.name for d in Department.query.order_by(Department.name).all()]
@@ -658,14 +864,22 @@ def tasks():
         return redirect(url_for('dashboard'))
     f = request.args.get('status')
     if f == 'In Progress':
-        all_t = Task.query.filter(Task.status.in_(ACTIVE_STATUSES)).order_by(Task.created_at.desc()).all()
+        query = Task.query.filter(Task.status.in_(ACTIVE_STATUSES))
     elif f == 'Canceled':
-        all_t = Task.query.filter(Task.status.in_(LEGACY_CANCELED)).order_by(Task.created_at.desc()).all()
+        query = Task.query.filter(Task.status.in_(LEGACY_CANCELED))
+    elif f == 'Overdue':
+        query = overdue_query()
     elif f:
-        all_t = Task.query.filter_by(status=f).order_by(Task.created_at.desc()).all()
+        query = Task.query.filter_by(status=f)
     else:
-        all_t = Task.query.order_by(Task.created_at.desc()).all()
-    return render_template('task_list.html', tasks=all_t)
+        query = Task.query
+    if request.args.get('mine'):
+        query = query.filter(db.or_(Task.assignee_id == current_user.id, Task.creator_id == current_user.id, Task.head_id == current_user.id))
+    q = (request.args.get('q') or '').strip()
+    if q:
+        like = f'%{q}%'
+        query = query.filter(db.or_(Task.title.ilike(like), Task.description.ilike(like)))
+    return render_template('task_list.html', tasks=query.order_by(Task.created_at.desc()).all())
 
 @app.route('/tasks/create', methods=['GET', 'POST'])
 @login_required
@@ -674,21 +888,53 @@ def create_task():
         flash_t('access_denied', 'danger')
         return redirect(url_for('dashboard'))
     if request.method == 'POST':
-        assignee = User.query.get(request.form.get('assigned_to'))
-        rule = HierarchyRule.query.filter_by(from_role=current_user.role, to_role=assignee.role).first()
-        cc_user = User.query.filter_by(role=rule.cc_role, is_active=True).first() if rule and rule.cc_role else None
-        new_task = Task(title=request.form.get('title'), description=request.form.get('description'), priority=request.form.get('priority'), recurrence=request.form.get('recurrence', 'None'), creator_id=current_user.id, assignee_id=assignee.id, head_id=cc_user.id if cc_user else None, status='In Progress')
-        dl = request.form.get('deadline')
+        assignee_id = request.form.get('assigned_to', type=int)
+        assignee = db.session.get(User, assignee_id) if assignee_id else None
+        title = (request.form.get('title') or '').strip()
+        if not assignee or not assignee.is_active or not title:
+            flash_t('invalid_input', 'danger')
+            return redirect(url_for('create_task'))
+        priority = request.form.get('priority')
+        if priority not in ('Low', 'Medium', 'High', 'Urgent'):
+            priority = 'Medium'
+        recurrence = request.form.get('recurrence', 'None')
+        if recurrence not in ('None', 'Daily', 'Weekly', 'Monthly'):
+            recurrence = 'None'
+        deadline = None
+        dl = (request.form.get('deadline') or '').strip()
         if dl:
-            try:
-                new_task.deadline = datetime.strptime(dl, '%Y-%m-%dT%H:%M')
-            except ValueError:
-                new_task.deadline = datetime.strptime(dl, '%Y-%m-%d %H:%M')
-        file = request.files.get('attachment')
-        if file and file.filename != '':
-            fname = f"{datetime.now().strftime('%Y%m%d%H%M')}_{secure_filename(file.filename)}"
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], fname))
-            new_task.attachment = fname
+            for fmt in ('%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M', '%Y-%m-%d'):
+                try:
+                    deadline = datetime.strptime(dl, fmt)
+                    break
+                except ValueError:
+                    continue
+            if deadline is None:
+                flash_t('invalid_deadline', 'danger')
+                return redirect(url_for('create_task'))
+        fname = save_upload(request.files.get('attachment'))
+        if fname is False:
+            flash_t('file_type_not_allowed', 'danger')
+            return redirect(url_for('create_task'))
+
+        rule = HierarchyRule.query.filter_by(from_role=current_user.role, to_role=assignee.role).first()
+        cc_user = None
+        if rule and rule.cc_role:
+            # Prefer a CC in the assignee's own department before falling back to anyone with that role.
+            cc_query = User.query.filter_by(role=rule.cc_role, is_active=True)
+            if assignee.department_id:
+                cc_user = cc_query.filter_by(department_id=assignee.department_id).first()
+            cc_user = cc_user or cc_query.first()
+        if not cc_user and assignee.department and assignee.department.head:
+            # No hierarchy rule matched: keep the assignee's department head in the loop.
+            head = assignee.department.head
+            if head.is_active and head.id not in (assignee.id, current_user.id):
+                cc_user = head
+        now = datetime.now()
+        new_task = Task(title=title, description=request.form.get('description'), priority=priority,
+                        recurrence=recurrence, next_run=next_recurrence(now, recurrence),
+                        creator_id=current_user.id, assignee_id=assignee.id, head_id=cc_user.id if cc_user else None,
+                        status='In Progress', created_at=now, deadline=deadline, attachment=fname or None)
         db.session.add(new_task); db.session.commit()
         create_notification(
             assignee.id, 'new_task',
@@ -704,14 +950,11 @@ def create_task():
                 link=f'/tasks/{new_task.id}', task_id=new_task.id
             )
         db.session.commit()
-        try:
-            recipients = [assignee.email] if assignee.email else []
-            cc_list = [cc_user.email] if (cc_user and cc_user.email) else []
-            if recipients:
-                msg = Message(f"مهمة جديدة: {new_task.title}", sender=app.config['MAIL_USERNAME'], recipients=recipients, cc=cc_list)
-                msg.body = f"مهمة جديدة.\nالعنوان: {new_task.title}\nبواسطة: {current_user.full_name}"
-                mail.send(msg)
-        except: pass
+        send_email(
+            f"مهمة جديدة: {new_task.title}", [assignee.email],
+            f"مهمة جديدة.\nالعنوان: {new_task.title}\nبواسطة: {current_user.full_name}\n{request.host_url.rstrip('/')}/tasks/{new_task.id}",
+            cc=[cc_user.email] if cc_user else None,
+        )
         flash_t('task_sent', 'success')
         return redirect(url_for('tasks'))
     return render_template('create_task.html', users=User.query.filter_by(is_active=True).order_by(User.full_name).all())
@@ -723,6 +966,9 @@ def task_detail(id):
     chat_updates = TaskUpdate.query.filter_by(task_id=task.id).order_by(TaskUpdate.created_at.asc()).all()
 
     if request.method == 'GET':
+        # Viewing a task clears its unread notifications for this user.
+        Notification.query.filter_by(user_id=current_user.id, task_id=task.id, is_read=False).update({'is_read': True})
+        db.session.commit()
         if current_user.id == task.assignee_id and not task.opened_at:
             task.opened_at = datetime.now()
             if not task.started_at:
@@ -744,6 +990,11 @@ def task_detail(id):
 
     if task.is_terminal:
         flash_t('task_closed_msg', 'danger')
+        return redirect(url_for('task_detail', id=task.id))
+
+    participants = {task.creator_id, task.assignee_id, task.head_id}
+    if current_user.id not in participants and current_user.role not in ['admin', 'CEO']:
+        flash_t('access_denied', 'danger')
         return redirect(url_for('task_detail', id=task.id))
 
     ns = request.form.get('status') or task.status
@@ -772,12 +1023,13 @@ def task_detail(id):
         return redirect(url_for('task_detail', id=task.id))
 
     if cnt:
-        file = request.files.get('file')
-        fname = None
-        if file and file.filename != '':
-            fname = f"update_{datetime.now().strftime('%Y%m%d%H%M%S')}_{secure_filename(file.filename)}"
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], fname))
-        db.session.add(TaskUpdate(content=cnt, is_note=bool(request.form.get('is_note')), filename=fname, task_id=task.id, user_id=current_user.id))
+        fname = save_upload(request.files.get('file'), prefix='update_')
+        if fname is False:
+            db.session.rollback()
+            flash_t('file_type_not_allowed', 'danger')
+            return redirect(url_for('task_detail', id=task.id))
+        is_note = bool(request.form.get('is_note')) and current_user.role in ['admin', 'CEO', 'Section Head', 'Manager']
+        db.session.add(TaskUpdate(content=cnt, is_note=is_note, filename=fname or None, task_id=task.id, user_id=current_user.id))
 
     if status_changed and not cnt:
         db.session.add(TaskUpdate(content=f"[SYS:status_change:{ns}]", is_note=True, task_id=task.id, user_id=current_user.id))
@@ -807,13 +1059,20 @@ def task_detail(id):
     flash_t('update_success', 'success')
     return redirect(url_for('task_detail', id=task.id))
 
+def run_migrations():
+    for stmt in (
+        'ALTER TABLE user ADD COLUMN department_id INTEGER REFERENCES department(id)',
+        'ALTER TABLE task ADD COLUMN opened_at DATETIME',
+    ):
+        try:
+            db.session.execute(text(stmt)); db.session.commit()
+        except Exception:
+            db.session.rollback()  # column already exists
+
 if __name__ == '__main__':
-    with app.app_context(): 
+    with app.app_context():
         db.create_all()
-        try: db.session.execute(text('ALTER TABLE user ADD COLUMN department_id INTEGER REFERENCES department(id)')); db.session.commit()
-        except: pass
-        try: db.session.execute(text('ALTER TABLE task ADD COLUMN opened_at DATETIME')); db.session.commit()
-        except: pass
+        run_migrations()
         seed_feature_visibility()
         seed_app_settings()
         Task.query.filter(Task.status == 'New').update({'status': 'In Progress'})
@@ -822,9 +1081,11 @@ if __name__ == '__main__':
         # تحديث بيانات الأدمن تلقائياً لو موجود بدل مسح قاعدة البيانات
         admin_user = User.query.filter_by(username='admin').first()
         if not admin_user:
-            db.session.add(User(full_name='CEO', username='admin', password=generate_password_hash('admin'), role='admin'))
-        else:
-            admin_user.full_name = 'المدير العام'  # تقدر تغير اسم المدير من هنا بعدين براحتك
+            # غيّر كلمة المرور الافتراضية فور أول تسجيل دخول
+            db.session.add(User(full_name='المدير العام', username='admin', password=generate_password_hash(os.environ.get('ADMIN_PASSWORD', 'admin')), role='admin'))
+            log.warning("Created default 'admin' user — change its password after first login.")
         db.session.commit()
+        if not mail_enabled():
+            log.info('MAIL_USERNAME/MAIL_PASSWORD not set — email notifications are disabled.')
         
     app.run(host='0.0.0.0', port=APP_PORT, debug=False, use_reloader=False)

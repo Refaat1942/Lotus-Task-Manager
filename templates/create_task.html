@@ -55,7 +55,7 @@
                                 <option value="" disabled selected>{{ t['select_emp'] }}</option>
                                 {% for user in users %}
                                     {% if user.id != current_user.id %}
-                                    <option value="{{ user.id }}">{{ user.full_name }} - {{ user.role }}</option>
+                                    <option value="{{ user.id }}">{{ user.full_name }} - {{ user.role }}{% if user.department %} ({{ user.department.name }}){% endif %}</option>
                                     {% endif %}
                                 {% endfor %}
                             </select>
