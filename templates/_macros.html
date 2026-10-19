@@ -1,0 +1,40 @@
+{# Shared UI pieces. Import with: {% from "_macros.html" import status_badge, priority_badge, avatar %} #}
+
+{% macro status_badge(task) -%}
+{%- set st = task.display_status -%}
+{%- if st == 'In Progress' and task.is_overdue -%}
+<span class="ltm-pill ltm-pill-danger"><i class="fas fa-exclamation-circle"></i>{{ t['overdue'] }}</span>
+{%- elif st == 'In Progress' and not task.opened_at -%}
+<span class="ltm-pill ltm-pill-warning" title="{{ t['awaiting_open'] }}"><i class="fas fa-envelope"></i>{{ t['awaiting_open'] }}</span>
+{%- elif st == 'In Progress' -%}
+<span class="ltm-pill ltm-pill-info"><i class="fas fa-spinner"></i>{{ status_label(st) }}</span>
+{%- elif st == 'Completed' -%}
+<span class="ltm-pill ltm-pill-success"><i class="fas fa-check"></i>{{ status_label(st) }}</span>
+{%- else -%}
+<span class="ltm-pill ltm-pill-muted"><i class="fas fa-ban"></i>{{ status_label(st) }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro priority_badge(priority) -%}
+{%- set cls = {'Urgent': 'danger', 'High': 'orange', 'Medium': 'info', 'Low': 'muted'}.get(priority, 'muted') -%}
+<span class="ltm-pill ltm-pill-{{ cls }} ltm-pill-sm"><i class="fas fa-flag"></i>{{ priority_label(priority) }}</span>
+{%- endmacro %}
+
+{% macro avatar(user, size=32) -%}
+{%- set name = (user.full_name or user.username) if user else '?' -%}
+<span class="ltm-avatar" style="width: {{ size }}px; height: {{ size }}px; font-size: {{ (size * 0.42)|int }}px; background: hsl({{ (name|length * 47 + (user.id if user else 0) * 83) % 360 }}, 55%, 46%);" title="{{ name }}">{{ name[:1]|upper }}</span>
+{%- endmacro %}
+
+{% macro user_cell(user, empty_label='--') -%}
+{%- if user -%}
+<div class="d-flex align-items-center gap-2 text-nowrap">
+    {{ avatar(user, 28) }}
+    <div class="lh-sm">
+        <div class="fw-semibold small">{{ user.full_name }}</div>
+        {% if user.department %}<div class="text-muted" style="font-size: .72rem;">{{ user.department.name }}</div>{% endif %}
+    </div>
+</div>
+{%- else -%}
+<span class="text-muted">{{ empty_label }}</span>
+{%- endif -%}
+{%- endmacro %}

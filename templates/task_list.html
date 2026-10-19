@@ -1,72 +1,92 @@
 {% extends "layout.html" %}
+{% from "_macros.html" import status_badge, priority_badge, user_cell with context %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold text-dark"><i class="fas fa-list"></i> {{ t['tasks_list'] }}</h3>
+{% set cur = request.args.get('status') %}
+{% set extra = ('&mine=1' if request.args.get('mine') else '') ~ ('&q=' ~ (request.args.get('q')|urlencode) if request.args.get('q') else '') %}
+<div class="page-header">
+    <div>
+        <h3><i class="fas fa-tasks text-primary me-2"></i>{{ t['tasks_list'] }}</h3>
+        <div class="page-sub">{{ tasks|length }} {{ t['tasks_count'] }}</div>
+    </div>
     {% if user_can_see('create_task') %}
-    <a href="/tasks/create" class="btn btn-primary"><i class="fas fa-plus"></i> {{ t['new_task'] }}</a>
+    <a href="/tasks/create" class="btn btn-primary fw-bold"><i class="fas fa-plus me-1"></i> {{ t['new_task'] }}</a>
     {% endif %}
 </div>
 
-{% set cur = request.args.get('status') %}
-{% set extra = ('&mine=1' if request.args.get('mine') else '') ~ ('&q=' ~ (request.args.get('q')|urlencode) if request.args.get('q') else '') %}
-<div class="card mb-4 border-0 shadow-sm">
+<div class="card mb-3">
     <div class="card-body p-2">
-        <ul class="nav nav-pills nav-fill flex-wrap">
-            <li class="nav-item"><a class="nav-link {{ 'active' if not cur else '' }}" href="/tasks?status={{ extra }}">{{ t['filter_all'] }}</a></li>
-            <li class="nav-item"><a class="nav-link {{ 'active' if cur == 'In Progress' else '' }}" href="/tasks?status=In%20Progress{{ extra }}"><i class="fas fa-spinner me-1"></i>{{ t['filter_progress'] }}</a></li>
-            <li class="nav-item"><a class="nav-link {{ 'active' if cur == 'Overdue' else '' }}" href="/tasks?status=Overdue{{ extra }}"><i class="fas fa-exclamation-triangle me-1"></i>{{ t['overdue'] }}</a></li>
-            <li class="nav-item"><a class="nav-link {{ 'active' if cur == 'Completed' else '' }}" href="/tasks?status=Completed{{ extra }}"><i class="fas fa-check me-1"></i>{{ t['filter_completed'] }}</a></li>
-            <li class="nav-item"><a class="nav-link {{ 'active' if cur == 'Canceled' else '' }}" href="/tasks?status=Canceled{{ extra }}"><i class="fas fa-ban me-1"></i>{{ t['filter_canceled'] }}</a></li>
+        <ul class="nav nav-pills flex-nowrap overflow-auto gap-1 pb-1">
+            {% for value, icon, label in [
+                ('', 'fa-list', t['filter_all']),
+                ('In Progress', 'fa-spinner', t['filter_progress']),
+                ('Overdue', 'fa-exclamation-triangle', t['overdue']),
+                ('Completed', 'fa-check', t['filter_completed']),
+                ('Canceled', 'fa-ban', t['filter_canceled'])
+            ] %}
+            <li class="nav-item">
+                <a class="nav-link text-nowrap {{ 'active' if (cur or '') == value else '' }}" href="/tasks?status={{ value|urlencode }}{{ extra }}">
+                    <i class="fas {{ icon }} me-1"></i>{{ label }}
+                </a>
+            </li>
+            {% endfor %}
         </ul>
         <form method="GET" action="/tasks" class="d-flex flex-wrap gap-2 align-items-center mt-2 px-1">
             {% if cur %}<input type="hidden" name="status" value="{{ cur }}">{% endif %}
-            <input type="search" name="q" value="{{ request.args.get('q', '') }}" class="form-control form-control-sm" style="max-width: 320px;" placeholder="{{ t['task_search_placeholder'] }}">
-            <div class="form-check mb-0">
-                <input class="form-check-input" type="checkbox" name="mine" value="1" id="mineOnly" {{ 'checked' if request.args.get('mine') else '' }} onchange="this.form.submit()">
-                <label class="form-check-label small" for="mineOnly">{{ t['my_tasks_only'] }}</label>
+            <div class="input-group input-group-sm" style="max-width: 360px;">
+                <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                <input type="search" name="q" value="{{ request.args.get('q', '') }}" class="form-control" placeholder="{{ t['task_search_placeholder'] }}">
             </div>
-            <button type="submit" class="btn btn-sm btn-outline-primary"><i class="fas fa-search"></i></button>
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" name="mine" value="1" id="mineOnly" {{ 'checked' if request.args.get('mine') else '' }} onchange="this.form.submit()">
+                <label class="form-check-label small fw-semibold" for="mineOnly">{{ t['my_tasks_only'] }}</label>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary px-3"><i class="fas fa-search"></i></button>
+            {% if request.args.get('q') or request.args.get('mine') %}
+            <a href="/tasks{{ '?status=' ~ (cur|urlencode) if cur else '' }}" class="btn btn-sm btn-light">{{ t['clear_filters'] }}</a>
+            {% endif %}
         </form>
     </div>
 </div>
 
-<div class="card shadow-sm border-0">
+<div class="card">
     <div class="card-body p-0">
         <div class="table-responsive scroll-panel">
             <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light text-secondary">
+                <thead class="bg-light sticky-top">
                     <tr>
-                        <th class="ps-4">#ID</th>
+                        <th class="ps-4">#</th>
                         <th>{{ t['task_title'] }}</th>
+                        <th class="d-none d-md-table-cell">{{ t['creator'] }}</th>
                         <th>{{ t['assignee'] }}</th>
-                        <th>{{ t['head_cc'] }}</th>
+                        <th class="d-none d-xl-table-cell">{{ t['head_cc'] }}</th>
                         <th>{{ t['deadline'] }}</th>
                         <th>{{ t['status'] }}</th>
-                        <th>{{ t['priority'] }}</th>
-                        <th>{{ t['action'] }}</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for task in tasks %}
-                    <tr>
-                        <td class="ps-4 fw-bold">#{{ task.id }}</td>
-                        <td><a href="/tasks/{{ task.id }}" class="text-decoration-none text-dark fw-bold">{{ task.title }}</a></td>
-                        <td><div class="d-flex align-items-center"><i class="fas fa-user-circle fs-4 me-2 text-muted"></i><span>{{ task.assignee.full_name if task.assignee else t['unassigned'] }}</span></div></td>
-                        <td><span class="text-info fw-bold"><i class="fas fa-eye"></i> {{ task.head.full_name if task.head else '--' }}</span></td>
-                        <td class="{{ 'text-danger fw-bold' if task.is_overdue else '' }}">{{ task.deadline.strftime('%Y-%m-%d %H:%M') if task.deadline else t['no_deadline'] }}</td>
-                        <td>
-                            <span class="badge bg-light text-dark border">{{ status_label(task.status) }}</span>
-                            {% if not task.opened_at and task.display_status == 'In Progress' %}
-                            <small class="d-block text-muted">{{ t['awaiting_open'] }}</small>
-                            {% endif %}
+                    <tr class="{{ 'row-overdue' if task.is_overdue else '' }}" role="button" onclick="location.href='{{ url_for('task_detail', id=task.id) }}'">
+                        <td class="ps-4 fw-bold text-muted">#{{ task.id }}</td>
+                        <td style="min-width: 220px;">
+                            <a href="{{ url_for('task_detail', id=task.id) }}" class="text-decoration-none text-dark fw-bold d-block">{{ task.title }}</a>
+                            <div class="d-flex flex-wrap gap-1 mt-1">
+                                {{ priority_badge(task.priority) }}
+                                {% if task.recurrence and task.recurrence != 'None' %}
+                                <span class="ltm-pill ltm-pill-success ltm-pill-sm"><i class="fas fa-redo"></i>{{ t['rec_' ~ task.recurrence|lower] }}</span>
+                                {% endif %}
+                                {% if task.attachment %}<span class="ltm-pill ltm-pill-muted ltm-pill-sm"><i class="fas fa-paperclip"></i></span>{% endif %}
+                            </div>
                         </td>
-                        <td>
-                            <span class="badge bg-secondary">{{ priority_label(task.priority) if task.priority else '--' }}</span>
+                        <td class="d-none d-md-table-cell">{{ user_cell(task.creator) }}</td>
+                        <td>{{ user_cell(task.assignee, t['unassigned']) }}</td>
+                        <td class="d-none d-xl-table-cell">{{ user_cell(task.head) }}</td>
+                        <td class="text-nowrap {{ 'text-danger fw-bold' if task.is_overdue else 'text-muted' }}">
+                            {% if task.deadline %}<i class="far fa-clock me-1"></i>{{ task.deadline.strftime('%Y-%m-%d %H:%M') }}{% else %}{{ t['no_deadline'] }}{% endif %}
                         </td>
-                        <td><a href="/tasks/{{ task.id }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> {{ t['view'] }}</a></td>
+                        <td>{{ status_badge(task) }}</td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="8" class="text-center py-5 text-muted"><i class="fas fa-inbox fa-3x mb-3"></i><br>{{ t['no_tasks'] }}</td></tr>
+                    <tr><td colspan="7"><div class="empty-state"><i class="fas fa-inbox"></i>{{ t['no_tasks'] }}</div></td></tr>
                     {% endfor %}
                 </tbody>
             </table>

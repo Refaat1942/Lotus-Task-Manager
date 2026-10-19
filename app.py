@@ -21,7 +21,7 @@ from sqlalchemy import text
 import i18n
 from i18n import TRANSLATIONS, t as tr, flash_t, status_label, priority_label, localized_user_name, update_content, normalize_status, is_system_update
 
-APP_VERSION = '2.5.0'
+APP_VERSION = '3.0.0'
 APP_NAME = 'Lotus Task Manager'
 APP_PORT = 5000
 
@@ -532,8 +532,35 @@ def dashboard():
         'overdue': overdue_query().count(),
         'completed': Task.query.filter(Task.status == 'Completed').count(),
     }
-    recent = Task.query.order_by(Task.created_at.desc()).limit(5).all()
-    return render_template('dashboard.html', stats=stats, recent_tasks=recent, today_date=datetime.now().strftime('%Y-%m-%d'))
+    stats['completion_rate'] = round(stats['completed'] * 100 / stats['total_tasks']) if stats['total_tasks'] else 0
+    recent = Task.query.order_by(Task.created_at.desc()).limit(8).all()
+    my_tasks = Task.query.filter(Task.assignee_id == current_user.id, Task.status.in_(ACTIVE_STATUSES)) \
+        .order_by(Task.deadline.is_(None), Task.deadline.asc(), Task.created_at.desc()).limit(10).all()
+    assigned_by_me = Task.query.filter(Task.creator_id == current_user.id, Task.status.in_(ACTIVE_STATUSES)) \
+        .order_by(Task.created_at.desc()).limit(10).all()
+
+    # Per-department workload, grouped by the assignee's department.
+    dept_stats = {}
+    now = datetime.now()
+    rows = db.session.query(Task.status, Task.deadline, User.department_id) \
+        .outerjoin(User, Task.assignee_id == User.id).all()
+    for status, deadline, dept_id in rows:
+        d = dept_stats.setdefault(dept_id, {'open': 0, 'overdue': 0, 'completed': 0, 'total': 0})
+        d['total'] += 1
+        if status in ACTIVE_STATUSES:
+            d['open'] += 1
+            if deadline and deadline < now:
+                d['overdue'] += 1
+        elif status == 'Completed':
+            d['completed'] += 1
+    dept_names = {d.id: d.name for d in Department.query.all()}
+    departments = sorted(
+        ({'name': dept_names.get(k) or tr('no_department'), **v} for k, v in dept_stats.items()),
+        key=lambda d: (-d['open'], d['name']))
+
+    return render_template('dashboard.html', stats=stats, recent_tasks=recent, my_tasks=my_tasks,
+                           assigned_by_me=assigned_by_me, departments=departments,
+                           today_date=datetime.now().strftime('%Y-%m-%d'))
 
 def overdue_query():
     return Task.query.filter(Task.deadline.isnot(None), Task.deadline < datetime.now(), Task.status.in_(ACTIVE_STATUSES))

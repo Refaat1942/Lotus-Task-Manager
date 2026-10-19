@@ -287,6 +287,57 @@
         }
         .table thead.bg-light { background: var(--ltm-blue-light) !important; color: var(--ltm-blue-dark); }
         .alert-success { background: var(--ltm-green-light); color: var(--ltm-green); border-color: #a7f3d0; }
+        /* ---- Shared components ---- */
+        .ltm-pill {
+            display: inline-flex; align-items: center; gap: .35rem;
+            padding: .28rem .7rem; border-radius: 999px;
+            font-size: .76rem; font-weight: 700; white-space: nowrap; line-height: 1.2;
+            border: 1px solid transparent;
+        }
+        .ltm-pill i { font-size: .7rem; }
+        .ltm-pill-sm { padding: .18rem .55rem; font-size: .7rem; }
+        .ltm-pill-info { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+        .ltm-pill-success { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+        .ltm-pill-warning { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+        .ltm-pill-danger { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+        .ltm-pill-orange { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+        .ltm-pill-muted { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+        .ltm-avatar {
+            display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+            border-radius: 50%; color: #fff; font-weight: 700; box-shadow: 0 1px 2px rgba(15,23,42,.15);
+        }
+        .page-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1.25rem; }
+        .page-header h3 { margin: 0; font-weight: 700; color: #0f172a; font-size: 1.4rem; }
+        .page-header .page-sub { color: #64748b; font-size: .85rem; margin-top: .15rem; }
+        .stat-card {
+            display: block; text-decoration: none; color: inherit;
+            border-radius: 14px; padding: 1.1rem 1.2rem; background: #fff;
+            border: 1px solid var(--ltm-border); transition: transform .15s ease, box-shadow .15s ease;
+            height: 100%;
+        }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(15,23,42,.08); color: inherit; }
+        .stat-card .stat-icon {
+            width: 46px; height: 46px; border-radius: 12px;
+            display: inline-flex; align-items: center; justify-content: center; font-size: 1.2rem;
+        }
+        .stat-card .stat-value { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+        .stat-card .stat-label { color: #64748b; font-size: .82rem; font-weight: 600; margin-top: .35rem; }
+        .table > :not(caption) > * > * { padding-top: .75rem; padding-bottom: .75rem; }
+        .table thead th { font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; white-space: nowrap; }
+        .table tbody tr.row-overdue { background: #fff8f8; }
+        .table tbody tr.row-overdue td:first-child { box-shadow: inset 3px 0 0 #ef4444; }
+        html[dir="rtl"] .table tbody tr.row-overdue td:first-child { box-shadow: inset -3px 0 0 #ef4444; }
+        .card { border-radius: 14px; }
+        .card > .card-header:first-child { border-radius: 14px 14px 0 0; }
+        .section-title { font-weight: 700; font-size: 1rem; color: #0f172a; margin: 0; }
+        .empty-state { text-align: center; padding: 2.5rem 1rem; color: #94a3b8; }
+        .empty-state i { font-size: 2.4rem; margin-bottom: .6rem; display: block; opacity: .6; }
+        .sidebar-backdrop { display: none; }
+        @media (max-width: 768px) {
+            .sidebar-backdrop.show { display: block; position: fixed; inset: 0; background: rgba(15,23,42,.4); z-index: 999; }
+            .container-fluid.p-4 { padding: 1rem !important; }
+            .stat-card .stat-value { font-size: 1.5rem; }
+        }
         @media (max-width: 768px) {
             .sidebar { transform: translateX({{ '100%' if lang=='ar' else '-100%' }}); transition: transform 0.25s ease; }
             .sidebar.active { transform: translateX(0); }
@@ -354,15 +405,22 @@
     </div>
     {% endif %}
 
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar(false)"></div>
     <div class="main-content">
         {% if current_user.is_authenticated %}
         <header class="app-topbar">
-            <button class="btn btn-outline-secondary d-md-none" type="button" onclick="document.getElementById('sidebar').classList.toggle('active')">
+            <button class="btn btn-outline-secondary d-md-none" type="button" onclick="toggleSidebar()">
                 <i class="fas fa-bars"></i>
             </button>
+            {% if user_can_see('create_task') and request.endpoint not in ('create_task', 'tasks') %}
+            <a href="/tasks/create" class="btn btn-primary btn-sm fw-bold d-none d-sm-inline-flex align-items-center gap-1">
+                <i class="fas fa-plus"></i> {{ t['new_task'] }}
+            </a>
+            {% endif %}
             <div class="topbar-user">
                 <div class="text-end">
                     <div class="topbar-user-name">{{ display_name }}</div>
+                    {% if current_user.department %}<div class="text-muted" style="font-size: .72rem;">{{ current_user.department.name }}</div>{% endif %}
                 </div>
                 <span class="topbar-user-role">{{ current_user.role }}</span>
                 <div class="dropdown">
@@ -391,7 +449,7 @@
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm border-0">
+                        <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm border-0 {{ 'ltm-autohide' if category == 'success' else '' }}">
                             <strong>{{ message }}</strong>
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
@@ -418,7 +476,7 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label fw-bold text-primary">{{ t['new_password'] }}</label>
-                            <input type="password" name="new_password" class="form-control" required minlength="6">
+                            <input type="password" name="new_password" class="form-control" required minlength="4">
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -441,6 +499,31 @@
         };
 
         const CSRF_TOKEN = "{{ csrf_token() }}";
+
+        function toggleSidebar(force) {
+            const sb = document.getElementById('sidebar');
+            if (!sb) return;
+            const open = typeof force === 'boolean' ? force : !sb.classList.contains('active');
+            sb.classList.toggle('active', open);
+            document.getElementById('sidebarBackdrop').classList.toggle('show', open);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Highlight the current page in the sidebar (longest matching path wins).
+            const path = window.location.pathname;
+            let best = null;
+            document.querySelectorAll('.sidebar-nav a[href^="/"]').forEach(function(a) {
+                const href = a.getAttribute('href');
+                if ((path === href || path.startsWith(href + '/')) && (!best || href.length > best.getAttribute('href').length)) best = a;
+            });
+            if (best) best.classList.add('active');
+            // Success messages fade out on their own.
+            setTimeout(function() {
+                document.querySelectorAll('.ltm-autohide').forEach(function(el) {
+                    bootstrap.Alert.getOrCreateInstance(el).close();
+                });
+            }, 4000);
+        });
         // Add the CSRF token to every POST form on the page (including forms whose action is set by JS).
         document.addEventListener('submit', function(e) {
             const form = e.target;
