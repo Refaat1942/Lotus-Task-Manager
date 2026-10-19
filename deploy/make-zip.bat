@@ -7,8 +7,8 @@ if exist "%~dp0lotus-deploy.zip" (
     echo Then on VPS:
     echo   mkdir -p /root/taskmanager/templates
     echo   unzip -o /root/lotus-deploy.zip -d /root/taskmanager/
-    echo   sed -i 's/\r$//' /root/taskmanager/update.sh
-    echo   bash /root/taskmanager/update.sh
+    echo   sed -i 's/\r$//' /root/taskmanager/deploy/update.sh
+    echo   bash /root/taskmanager/deploy/update.sh
     echo.
     echo Login page must show badge: v2.2.0
     explorer /select,"%~dp0lotus-deploy.zip"

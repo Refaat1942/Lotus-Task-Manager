@@ -5,3 +5,10 @@ venv/
 instance/*.db
 *.log
 .DS_Store
+instance/
+taskmanager.db
+static/uploads/*
+!static/uploads/.gitkeep
+deploy/lotus-deploy.zip
+deploy/install-on-vps.sh
+deploy/upload-log.txt

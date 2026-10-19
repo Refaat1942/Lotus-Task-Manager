@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, make_response, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, make_response, abort, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -339,6 +339,46 @@ def set_language(lang_code):
     if lang_code in TRANSLATIONS:
         session['lang'] = lang_code
     return back()
+
+# --- CSRF protection ---
+def get_csrf_token():
+    token = session.get('_csrf_token')
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session['_csrf_token'] = token
+    return token
+
+@app.context_processor
+def inject_csrf():
+    return dict(csrf_token=get_csrf_token)
+
+@app.before_request
+def security_checks():
+    # Attachments are only served to logged-in users through /uploads/<name>.
+    if request.endpoint == 'static' and (request.view_args or {}).get('filename', '').replace('\\', '/').startswith('uploads/'):
+        abort(404)
+    if request.method == 'POST' and not app.config.get('TESTING_SKIP_CSRF'):
+        sent = request.form.get('csrf_token') or request.headers.get('X-CSRFToken')
+        expected = session.get('_csrf_token')
+        if not sent or not expected or not secrets.compare_digest(sent, expected):
+            if request.path.startswith('/api/'):
+                return jsonify({'ok': False, 'error': 'csrf'}), 400
+            flash_t('session_expired', 'warning')
+            return back('login')
+
+@app.after_request
+def security_headers(response):
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    response.headers.setdefault('Referrer-Policy', 'same-origin')
+    return response
+
+@app.route('/uploads/<path:filename>')
+@login_required
+def uploaded_file(filename):
+    image_types = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf')
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename,
+                               as_attachment=not filename.lower().endswith(image_types))
 
 @app.errorhandler(413)
 def file_too_large(_e):
@@ -1069,7 +1109,13 @@ def run_migrations():
         except Exception:
             db.session.rollback()  # column already exists
 
-if __name__ == '__main__':
+_db_initialized = False
+
+def init_db():
+    """Create tables, run light migrations and seed defaults. Safe to call repeatedly."""
+    global _db_initialized
+    if _db_initialized:
+        return
     with app.app_context():
         db.create_all()
         run_migrations()
@@ -1077,8 +1123,7 @@ if __name__ == '__main__':
         seed_app_settings()
         Task.query.filter(Task.status == 'New').update({'status': 'In Progress'})
         db.session.commit()
-        
-        # تحديث بيانات الأدمن تلقائياً لو موجود بدل مسح قاعدة البيانات
+
         admin_user = User.query.filter_by(username='admin').first()
         if not admin_user:
             # غيّر كلمة المرور الافتراضية فور أول تسجيل دخول
@@ -1087,5 +1132,10 @@ if __name__ == '__main__':
         db.session.commit()
         if not mail_enabled():
             log.info('MAIL_USERNAME/MAIL_PASSWORD not set — email notifications are disabled.')
-        
-    app.run(host='0.0.0.0', port=APP_PORT, debug=False, use_reloader=False)
+    _db_initialized = True
+
+# Runs on import too, so `gunicorn app:app` gets a ready database.
+init_db()
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('APP_PORT', APP_PORT)), debug=False, use_reloader=False)

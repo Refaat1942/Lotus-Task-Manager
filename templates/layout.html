@@ -440,6 +440,21 @@
             default: 'fas fa-bell text-info'
         };
 
+        const CSRF_TOKEN = "{{ csrf_token() }}";
+        // Add the CSRF token to every POST form on the page (including forms whose action is set by JS).
+        document.addEventListener('submit', function(e) {
+            const form = e.target;
+            if (!form || (form.method || '').toLowerCase() !== 'post') return;
+            let input = form.querySelector('input[name="csrf_token"]');
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                form.appendChild(input);
+            }
+            input.value = CSRF_TOKEN;
+        }, true);
+
         document.addEventListener('DOMContentLoaded', function() {
             updateBadgeUI();
             initNotifications();
@@ -458,7 +473,7 @@
                 bell.addEventListener('click', function() {
                     localStorage.setItem('unread_count', '0');
                     updateBadgeUI();
-                    fetch('/api/notifications/mark_read', { method: 'POST' }).catch(() => {});
+                    fetch('/api/notifications/mark_read', { method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN } }).catch(() => {});
                 });
             }
 
